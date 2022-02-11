@@ -283,37 +283,37 @@ func tokToOp(tok TokenType) machine.Opcode {
 	var op machine.Opcode
 	switch tok {
 	case TokAdd:
-		op = machine.OpAdd
+		op = machine.Add
 	case TokSub:
-		op = machine.OpSub
+		op = machine.Sub
 	case TokMul:
-		op = machine.OpMul
+		op = machine.Mul
 	case TokDiv:
-		op = machine.OpDiv
+		op = machine.Div
 	case TokCmp:
-		op = machine.OpCmp
+		op = machine.Cmp
 	case TokAnd:
-		op = machine.OpAnd
+		op = machine.And
 	case TokOr:
-		op = machine.OpOr
+		op = machine.Or
 	case TokXor:
-		op = machine.OpXor
+		op = machine.Xor
 	case TokCpy:
-		op = machine.OpCpy
+		op = machine.Cpy
 	case TokPsh:
-		op = machine.OpPsh
+		op = machine.Psh
 	case TokPop:
-		op = machine.OpPop
+		op = machine.Pop
 	case TokJmp:
-		op = machine.OpJmp
+		op = machine.Jmp
 	case TokJeq:
-		op = machine.OpJeq
+		op = machine.Jeq
 	case TokJne:
-		op = machine.OpJne
+		op = machine.Jne
 	case TokJge:
-		op = machine.OpJge
+		op = machine.Jge
 	case TokJlt:
-		op = machine.OpJlt
+		op = machine.Jlt
 	default:
 		panic("unknown opcode")
 	}
