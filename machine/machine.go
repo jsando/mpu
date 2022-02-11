@@ -105,6 +105,7 @@ func (m *Machine) WriteWord(addr, value int) {
 func (m *Machine) writeTarget(addr, value int) {
 	m.WriteWord(addr, value)
 	m.updateFlags(value)
+	//fmt.Printf("  0x%0x <- 0x%0x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
 }
 
 func (m *Machine) updateFlags(value int) {
@@ -138,7 +139,7 @@ func (m *Machine) Run() {
 		n, target, value1, value2 := m.fetchOperands(mode, pc+1, opCount)
 
 		// trace output
-		m.trace(pc, opcode, mode, target, value1, value2)
+		//m.trace(pc, opcode, mode, target, value1, value2)
 
 		m.WriteWord(ProgramCounter, pc+n+1) // todo panic on pc overflow
 
@@ -228,6 +229,10 @@ func (m *Machine) trace(pc int, opcode Opcode, mode OperandMode, target int, val
 		args = fmt.Sprintf("param1: %s", formatArg(mode, 1, value1))
 	}
 	fmt.Printf("pc: 0x%04x %s target: 0x%04x, %s\n", pc, opcode, target, args)
+}
+
+func (m *Machine) Snapshot() []byte {
+	return m.memory[:]
 }
 
 func formatArg(mode OperandMode, argNum int, argValue int) string {

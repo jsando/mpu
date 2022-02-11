@@ -3,6 +3,7 @@ package asm
 import (
 	"encoding/hex"
 	"fmt"
+	machine2 "github.com/jsando/lilac/machine"
 	"os"
 	"strings"
 	"testing"
@@ -20,7 +21,7 @@ main:
 	cpy ptr, #0x2000
 loop:
 	cpy *ptr, #0xd0d0
-	add ptr, 2
+	add ptr, #2
 	cmp ptr, #0x3000
 	jlt loop
 	db 0 // halt
@@ -40,6 +41,8 @@ loop:
 	fmt.Println()
 
 	WriteListing(strings.NewReader(str), os.Stdout, linker)
+	machine := machine2.NewMachineFromSlice(linker.Code())
+	machine.Run()
 }
 
 func dumpTokens(in string) {

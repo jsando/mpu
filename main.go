@@ -41,7 +41,7 @@ func main() {
 				asm.WriteListing(file, os.Stdout, linker)
 				outFileName := file.Name()[:len(file.Name())-2] + ".bin"
 				code := linker.Code()
-				err = ioutil.WriteFile(outFileName, code, 0)
+				err = ioutil.WriteFile(outFileName, code, 0644)
 				if err != nil {
 					fmt.Printf("error writing object file '%s': %s\n", outFileName, err)
 				} else {
@@ -57,6 +57,7 @@ func main() {
 		}
 		m := machine.NewMachineFromSlice(bytes)
 		m.Run()
-		// todo dump machine state somehow
+		fmt.Printf("Program completed, memory dump:\n")
+		//fmt.Println(hex.Dump(m.Snapshot()))
 	}
 }
