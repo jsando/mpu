@@ -1,3 +1,34 @@
+# My todo list
+
+- [ ] equates aren't working
+- [ ] Have lister dump symbol table
+- [ ] Add HLT as op
+- [ ] Assembler needs to handle local labels
+- [ ] Fix the parser so labels don't need the trailing colon
+- [ ] Add 'Hlt' as opcode
+- [ ] Make jumps always take arg as immediate .. don't need abs or indirect
+- [ ] Stack relative addressing would be awesome for local vars
+- [ ] Need a monitor to inspect memory, disassemble, etc
+- [ ] Some kind of character i/o would be fantastic
+
+
+Looking at this 6502 listing I like the feel of it:
+
+https://github.com/oconnor663/blake3-6502/blob/main/rom.s
+
+Directives:
+
+    .byte
+    .word
+    .asciiz
+    .org
+
+I like that equates don't look like opcodes.  Also that the type of arg must match.
+
+Comments are ';'
+
+Equates use '=' and don't require a colon ... I have a lookahead of 1 anyway for labels so that is no problem.
+
 # Memory Machine
 
 What if instead of an anemic 6502 register machine, I make one with no registers but that has a rich set of operators against memory?  All arithmetic and comparison instructions can be done on memory.  The program counter and stack pointer are located in memory.
@@ -78,6 +109,99 @@ Encoding:
         M = Addressing mode
         S = Word size
         I = Instruction opcode
+
+I'm wishing now I had a stack-relative addressing mode for local vars, and a jsr/ret instruction.  Maybe I need to give up a single-byte encoding ... I don't need a 64k limit?  Oh ... yes I do.  I have 16 bit modes.
+
+Also ... if I use a lookup table I could use all 256 available instructions/modes.
+
+What I'm actually using right now:
+
+* 5 - 5 jump instructions using immediate mode
+* 45 - 9 binop instructions where arg1 can be abs or ind, and arg2 can be abs, ind, or immed (6 variations each)
+* 3 - psh imm, ind, abs
+* 2 - pop ind, abs
+
+That's only 55 instructions.  If I add the byte variation that's still only 110.  I can add another hundred ... but not if I use reserved bits for all this.
+
+Not every instruction supports byte mode.  An immediate mode byte should take only 1 byte of memory.  10 instructions can operate on bytes.
+
+Can I encode zero page addresses as a single byte?  Ugh.  That would be special opcodes.  Maybe worth it for the most common ones like add/sub/cpy.
+
+Hang on ... indirect is a modifier of abs/rel.  I would want relative, absolute, relative indirect, absolute indirect, immediate.
+
+Another option for handling different word sizes is to make that a mode, ie a set/clear word mode.  Based on the current mode it would operate on bytes vs words.  That frees up a lot more room for additional addressing modes or new instructions.
+
+Is it reasonable to require indirect via a local var?  Seems ok?  Then I could restrict the modes to:
+
+* Immediate (imm)
+* Absolute (abs)
+* Indirect (ind)
+* SP Relative (spr)
+* SP Relative Indirect (spri)
+
+abs, imm
+abs, abs
+abs, ind
+abs, spr
+abs, spri
+ind, imm
+ind, abs
+ind, ind
+ind, spr
+ind, spri
+spr, imm
+spr, abs
+spr, ind
+spr, spr
+spr, spri
+spri, imm
+spri, abs
+spri, ind
+spri, spr
+spri, spri
+
+The main 8 instructions.
+
+add
+sub
+mul
+div
+and
+or
+xor
+cpy
+
+Push supports all modes including immediate (so 5).
+
+psh
+
+Pop supports everything but immediate (so 4).
+
+pop
+
+These are just immediate. 7x1 = 7
+
+jmp
+jeq
+jne
+jge
+jlt
+jsr
+
+Possible chopping block:
+    * clc
+    * sec
+    * jcs
+    * jcc
+
+How about this wacky encoding idea ... opcode opmode operands
+    - opcode is the 1 byte instruction (so up to 256 instructions)
+    - opmode describes up to two params by address mode (so up to 16 modes!)
+        - could have zero page modes
+        - single byte vs word immediate mode
+
+Don't need an instruction lookup table.  Can parse operands totally separate from decoding the instruction.
+
 
 # Assembler Directives
 

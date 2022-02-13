@@ -2,6 +2,7 @@ package asm
 
 import (
 	"fmt"
+	"github.com/jsando/lilac/machine2"
 	"strings"
 )
 
@@ -31,7 +32,7 @@ const (
 )
 
 type Operand struct {
-	mode AddressMode
+	mode machine2.AddressMode
 	expr Expr
 }
 
@@ -76,7 +77,7 @@ type ExprUnary struct {
 func (e ExprUnary) computeValue(symbols *SymbolTable) (ival int, bval []byte, resolved bool) {
 	// + is a noop, so only -
 	ival, bval, resolved = e.expr.computeValue(symbols)
-	if resolved {
+	if resolved && e.op == TokMinus {
 		// todo: if bval is defined this doesn't make any sense
 		ival = -ival
 	}

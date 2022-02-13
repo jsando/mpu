@@ -2,6 +2,7 @@ package asm
 
 import (
 	"fmt"
+	"github.com/jsando/lilac/machine2"
 	"strconv"
 	"strings"
 )
@@ -124,6 +125,9 @@ func (p *Parser) parseOperands() []*Operand {
 	var operands []*Operand
 	for {
 		operand := p.parseOperand()
+		if operand == nil {
+			return operands
+		}
 		operands = append(operands, operand)
 		if p.lexer.tok != TokComma {
 			break
@@ -135,15 +139,53 @@ func (p *Parser) parseOperands() []*Operand {
 
 func (p *Parser) parseOperand() *Operand {
 	tok := p.lexer.tok
-	mode := AbsoluteMode
+	if tok == TokEOL {
+		return nil
+	}
+	mode := machine2.Absolute
+	match := TokNone
 	if tok == TokStar {
-		mode = IndirectMode
-		p.lexer.Next()
+		if p.lexer.s.Peek() == '[' {
+			p.lexer.Next()
+			p.expect(TokLeftBracket)
+			p.lexer.Next() // consumer 'sp'
+			p.expect(TokIdent)
+			text := p.lexer.s.TokenText()
+			if text != "sp" {
+				p.errorf("expected 'sp', got %s", text)
+			}
+			if p.messages.errors > 0 {
+				return nil
+			}
+			p.lexer.Next()
+			match = TokRightBracket
+			mode = machine2.RelativeIndirect
+		} else {
+			mode = machine2.Indirect
+			p.lexer.Next()
+		}
 	} else if tok == TokHash {
-		mode = ImmediateMode
+		mode = machine2.Immediate
+		p.lexer.Next()
+	} else if tok == TokLeftBracket {
+		match = TokRightBracket
+		mode = machine2.Relative
+		p.lexer.Next()
+		p.expect(TokIdent)
+		text := p.lexer.s.TokenText()
+		if text != "sp" {
+			p.errorf("expected 'sp', got %s", text)
+		}
+		if p.messages.errors > 0 {
+			return nil
+		}
 		p.lexer.Next()
 	}
 	expr := p.parseExpr()
+	if match != TokNone {
+		p.expect(match)
+		p.lexer.Next()
+	}
 	return &Operand{
 		mode: mode,
 		expr: expr,
@@ -209,7 +251,7 @@ func (p *Parser) parsePrimaryExpr() Expr {
 	switch p.lexer.tok {
 	case TokLeftParen:
 		expr = p.parseExpr()
-		p.expect(TokRightParent, "expected ')'")
+		p.expect(TokRightParen)
 	case TokIdent:
 		expr = ExprIdent{ident: p.lexer.s.TokenText()}
 	case TokString:
@@ -245,9 +287,9 @@ func (p *Parser) parsePrimaryExpr() Expr {
 	return expr
 }
 
-func (p *Parser) expect(tokenType TokenType, msg string) {
+func (p *Parser) expect(tokenType TokenType) {
 	if p.lexer.tok != tokenType {
-		p.errorf(msg)
+		p.errorf("expected: %s, got: %s", tokenType, p.lexer.s.TokenText())
 	}
 }
 

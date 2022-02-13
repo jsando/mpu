@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/jsando/lilac/asm"
-	"github.com/jsando/lilac/machine"
+	machine2 "github.com/jsando/lilac/machine"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -55,7 +55,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		m := machine.NewMachineFromSlice(bytes)
+		m := machine2.NewMachineFromSlice(bytes)
 		m.Run()
 		fmt.Printf("Program completed, memory dump:\n")
 		//fmt.Println(hex.Dump(m.Snapshot()))

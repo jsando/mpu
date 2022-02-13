@@ -2,7 +2,7 @@ package asm
 
 import (
 	"fmt"
-	"github.com/jsando/lilac/machine"
+	"github.com/jsando/lilac/machine2"
 )
 
 type Linker struct {
@@ -46,9 +46,13 @@ func (l *Linker) Link() {
 			l.doDefineByte(frag)
 		case TokDs:
 			l.doDefineSpace(frag)
+		case TokSec, TokClc, TokSeb, TokClb, TokRet:
+			l.doEmit0Operand(frag)
 		case TokAdd, TokSub, TokMul, TokDiv, TokCmp, TokAnd, TokOr, TokXor, TokCpy:
 			l.doEmit2Operand(frag)
-		case TokPsh, TokPop, TokJmp, TokJeq, TokJne, TokJge, TokJlt:
+		case TokJmp, TokJeq, TokJne, TokJge, TokJlt, TokJcc, TokJcs, TokJsr:
+			l.doEmitJump(frag)
+		case TokInc, TokDec, TokPsh, TokPop:
 			l.doEmit1Operand(frag)
 		}
 		frag.pcEnd = l.pc
@@ -156,7 +160,7 @@ func (l *Linker) doOrg(frag *Fragment) {
 func (l *Linker) doDefineWord(frag *Fragment) {
 	l.defineLabels(frag)
 	for _, operand := range frag.operands {
-		if operand.mode != AbsoluteMode {
+		if operand.mode != machine2.Absolute {
 			l.errorf(frag, "illegal operand mode for dw")
 			return
 		}
@@ -177,7 +181,7 @@ func (l *Linker) doDefineWord(frag *Fragment) {
 func (l *Linker) doDefineByte(frag *Fragment) {
 	l.defineLabels(frag)
 	for _, operand := range frag.operands {
-		if operand.mode != AbsoluteMode {
+		if operand.mode != machine2.Absolute {
 			l.errorf(frag, "illegal operand mode for db")
 			return
 		}
@@ -201,7 +205,7 @@ func (l *Linker) doDefineSpace(frag *Fragment) {
 		return
 	}
 	operand := frag.operands[0]
-	if operand.mode != AbsoluteMode {
+	if operand.mode != machine2.Absolute {
 		l.errorf(frag, "invalid operand for ds")
 		return
 	}
@@ -226,10 +230,8 @@ func (l *Linker) doEmit2Operand(frag *Fragment) {
 	}
 	op1 := frag.operands[0]
 	op2 := frag.operands[1]
-	size := machine.SizeWord
-	mode := getMachineMode(op1.mode, op2.mode)
 	op := tokToOp(frag.operation)
-	opCode := machine.EncodeOp(op, mode, size)
+	opCode := machine2.EncodeOp(op, op1.mode, op2.mode)
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(frag, op1)
 	l.resolveWordOperand(frag, op2)
@@ -242,12 +244,31 @@ func (l *Linker) doEmit1Operand(frag *Fragment) {
 		return
 	}
 	op1 := frag.operands[0]
-	size := machine.SizeWord
-	mode := getMachineMode(op1.mode, AbsoluteMode)
 	op := tokToOp(frag.operation)
-	opCode := machine.EncodeOp(op, mode, size)
+	opCode := machine2.EncodeOp(op, op1.mode, machine2.Implied)
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(frag, op1)
+}
+
+func (l *Linker) doEmitJump(frag *Fragment) {
+	if len(frag.operands) != 1 {
+		l.errorf(frag, "expected 1 operand")
+		return
+	}
+	// override so we don't need # on all jumps
+	frag.operands[0].mode = machine2.Immediate
+	l.doEmit1Operand(frag)
+}
+
+func (l *Linker) doEmit0Operand(frag *Fragment) {
+	l.defineLabels(frag)
+	if len(frag.operands) != 0 {
+		l.errorf(frag, "expected 0 operands, got %d", len(frag.operands))
+		return
+	}
+	op := tokToOp(frag.operation)
+	opCode := machine2.EncodeOp(op, machine2.Implied, machine2.Implied)
+	l.writeByte(int(opCode))
 }
 
 func (l *Linker) resolveWordOperand(frag *Fragment, op *Operand) {
@@ -279,69 +300,63 @@ func (l *Linker) Code() []byte {
 	return l.code[0 : l.pc+1]
 }
 
-func tokToOp(tok TokenType) machine.Opcode {
-	var op machine.Opcode
+func tokToOp(tok TokenType) machine2.OpCode {
+	var op machine2.OpCode
 	switch tok {
 	case TokAdd:
-		op = machine.Add
+		op = machine2.Add
 	case TokSub:
-		op = machine.Sub
+		op = machine2.Sub
 	case TokMul:
-		op = machine.Mul
+		op = machine2.Mul
 	case TokDiv:
-		op = machine.Div
+		op = machine2.Div
 	case TokCmp:
-		op = machine.Cmp
+		op = machine2.Cmp
 	case TokAnd:
-		op = machine.And
+		op = machine2.And
 	case TokOr:
-		op = machine.Or
+		op = machine2.Or
 	case TokXor:
-		op = machine.Xor
+		op = machine2.Xor
 	case TokCpy:
-		op = machine.Cpy
+		op = machine2.Cpy
 	case TokPsh:
-		op = machine.Psh
+		op = machine2.Psh
 	case TokPop:
-		op = machine.Pop
+		op = machine2.Pop
+	case TokInc:
+		op = machine2.Inc
+	case TokDec:
+		op = machine2.Dec
 	case TokJmp:
-		op = machine.Jmp
+		op = machine2.Jmp
 	case TokJeq:
-		op = machine.Jeq
+		op = machine2.Jeq
 	case TokJne:
-		op = machine.Jne
+		op = machine2.Jne
 	case TokJge:
-		op = machine.Jge
+		op = machine2.Jge
 	case TokJlt:
-		op = machine.Jlt
+		op = machine2.Jlt
+	case TokJcc:
+		op = machine2.Jcc
+	case TokJcs:
+		op = machine2.Jcs
+	case TokJsr:
+		op = machine2.Jsr
+	case TokSec:
+		op = machine2.Sec
+	case TokClc:
+		op = machine2.Clc
+	case TokSeb:
+		op = machine2.Seb
+	case TokClb:
+		op = machine2.Clb
+	case TokRet:
+		op = machine2.Ret
 	default:
 		panic("unknown opcode")
 	}
 	return op
-}
-
-func getMachineMode(op1, op2 AddressMode) machine.OperandMode {
-	switch op1 {
-	case ImmediateMode:
-		return machine.ParamImm
-	case AbsoluteMode:
-		switch op2 {
-		case AbsoluteMode:
-			return machine.ParamAbsAbs
-		case ImmediateMode:
-			return machine.ParamAbsImm
-		case IndirectMode:
-			return machine.ParamAbsInd
-		}
-	case IndirectMode:
-		switch op2 {
-		case AbsoluteMode:
-			return machine.ParamIndAbs
-		case ImmediateMode:
-			return machine.ParamIndImm
-		case IndirectMode:
-			return machine.ParamIndInd
-		}
-	}
-	panic("invalid mode")
 }

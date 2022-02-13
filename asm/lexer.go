@@ -29,7 +29,9 @@ const (
 	TokLeftShift
 	TokRightShift
 	TokLeftParen
-	TokRightParent
+	TokRightParen
+	TokLeftBracket
+	TokRightBracket
 	TokEquals
 	TokOrg
 	TokDw
@@ -51,6 +53,16 @@ const (
 	TokJne
 	TokJge
 	TokJlt
+	TokInc
+	TokDec
+	TokJsr
+	TokRet
+	TokClc
+	TokSec
+	TokClb
+	TokSeb
+	TokJcc
+	TokJcs
 	TokEOL
 )
 
@@ -60,12 +72,15 @@ var tokenImage = []string{
 	"<eof>", "<ident>", "<int>", "<char>", "<string>",
 	".", ":", "#", "*", ",",
 	"+", "-", "|", "^", "/",
-	"%", "<<", ">>", "(", ")",
+	"%", "<<", ">>", "(", ")", "[", "]",
 	"=", "org", "dw", "db", "ds",
 	"add", "sub", "mul", "div", "cmp",
 	"and", "or", "xor", "cpy", "psh",
 	"pop", "jmp", "jeq", "jne", "jge",
-	"jlt", "<eol>",
+	"jlt", "inc", "dec", "jsr", "ret",
+	"clc", "sec", "clb", "seb", "jcc",
+	"jcs",
+	"<eol>",
 }
 
 func (t TokenType) String() string {
@@ -139,7 +154,11 @@ func (l *Lexer) Next() TokenType {
 	case '(':
 		l.tok = TokLeftParen
 	case ')':
-		l.tok = TokRightParent
+		l.tok = TokRightParen
+	case '[':
+		l.tok = TokLeftBracket
+	case ']':
+		l.tok = TokRightBracket
 	case '<':
 		if s.Peek() == '<' {
 			l.tok = TokLeftShift
