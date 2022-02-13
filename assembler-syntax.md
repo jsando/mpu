@@ -2,12 +2,9 @@
 
 - [ ] equates aren't working
 - [ ] Have lister dump symbol table
-- [ ] Add HLT as op
 - [ ] Assembler needs to handle local labels
 - [ ] Fix the parser so labels don't need the trailing colon
 - [ ] Add 'Hlt' as opcode
-- [ ] Make jumps always take arg as immediate .. don't need abs or indirect
-- [ ] Stack relative addressing would be awesome for local vars
 - [ ] Need a monitor to inspect memory, disassemble, etc
 - [ ] Some kind of character i/o would be fantastic
 
@@ -23,7 +20,7 @@ Directives:
     .asciiz
     .org
 
-I like that equates don't look like opcodes.  Also that the type of arg must match.
+I like that directives don't look like opcodes.  Also that the type of arg must match.
 
 Comments are ';'
 

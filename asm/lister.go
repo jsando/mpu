@@ -43,5 +43,9 @@ func WriteListing(in io.Reader, out io.Writer, linker *Linker) error {
 			frag = frag.next
 		}
 	}
+	fmt.Fprintf(out, "\n\nSymbols\n")
+	for k, v := range linker.symbols.symbols {
+		fmt.Fprintf(out, "  %-50s: 0x%04x\n", k, v.value)
+	}
 	return nil
 }

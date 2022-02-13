@@ -11,8 +11,8 @@ type Parser struct {
 	messages      *Messages
 	lexer         *Lexer
 	pc            int
-	first         *Fragment
-	last          *Fragment
+	first         *Statement
+	last          *Statement
 	label         string   // most recent global label
 	pendingLabels []string // labels to be assigned to the next fragment
 }
@@ -51,15 +51,25 @@ func (p *Parser) Parse() {
 
 		if tok == TokIdent {
 			// label if followed by ':' (else it's a directive/opcode)
-			if lexer.s.Peek() == ':' {
+			peek := lexer.s.Peek()
+			if peek == ':' {
 				p.defineLabel(lexer.s.TokenText())
 				lexer.s.Next()
 				lexer.Next()
 				continue
 			}
 
-			// must be a keyword
+			// If the next token is '=', its an equate .. otherwise its an opcode or directive
 			text := lexer.s.TokenText()
+			p.lexer.Next()
+			if p.lexer.tok == TokEquals {
+				p.lexer.Next()
+				fragment := p.newFragment(TokEquals)
+				fragment.labels = []string{text}
+				operands := p.parseOperands()
+				fragment.operands = operands
+				continue
+			}
 			tok = toKeyword(text)
 			if tok == TokIdent {
 				p.errorf("expected directive or opcode, got: %s", text)
@@ -67,7 +77,6 @@ func (p *Parser) Parse() {
 				continue
 			}
 			fragment := p.newFragment(tok)
-			p.lexer.Next()
 			operands := p.parseOperands()
 			fragment.operands = operands
 		}
@@ -76,8 +85,8 @@ func (p *Parser) Parse() {
 
 // newFragment creates a new fragment with all pending labels and links it
 // into the linked list.
-func (p *Parser) newFragment(operation TokenType) *Fragment {
-	fragment := &Fragment{
+func (p *Parser) newFragment(operation TokenType) *Statement {
+	fragment := &Statement{
 		file:      p.lexer.s.Filename,
 		line:      p.lexer.line,
 		labels:    p.pendingLabels,
@@ -250,8 +259,10 @@ func (p *Parser) parsePrimaryExpr() Expr {
 	var expr Expr
 	switch p.lexer.tok {
 	case TokLeftParen:
+		p.lexer.Next()
 		expr = p.parseExpr()
 		p.expect(TokRightParen)
+		p.lexer.Next()
 	case TokIdent:
 		expr = ExprIdent{ident: p.lexer.s.TokenText()}
 	case TokString:
@@ -301,7 +312,7 @@ func (p *Parser) HasErrors() bool {
 	return p.messages.errors > 0
 }
 
-func (p *Parser) Fragments() *Fragment {
+func (p *Parser) Fragments() *Statement {
 	return p.first
 }
 

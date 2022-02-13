@@ -9,22 +9,7 @@ import (
 )
 
 func TestTokenizer(t *testing.T) {
-	str := `
-pc:	dw main		// entry point
-sp:	dw 0xffff	// stack pointer (grows down)
-
-	org 0x0100
-ptr: dw 0	
-
-main:
-	cpy ptr, #0x2000
-loop:
-	cpy *ptr, #0xd0d0
-	add ptr, #2
-	cmp ptr, #0x3000
-	jlt loop
-	db 0 // halt
-`
+	str := "number = 5"
 	lexer := NewLexer("test", strings.NewReader(str))
 	parser := NewParser(lexer)
 	parser.Parse()

@@ -6,7 +6,7 @@ import (
 )
 
 type Linker struct {
-	fragment *Fragment
+	fragment *Statement
 	symbols  *SymbolTable
 	messages *Messages
 	pc       int
@@ -16,13 +16,13 @@ type Linker struct {
 
 // patch is a expression with a forward reference to be resoled on pass 2
 type patch struct {
-	fragment *Fragment
+	fragment *Statement
 	expr     Expr
 	pc       int
 	size     int // 1 = byte, 2 = word
 }
 
-func NewLinker(fragment *Fragment) *Linker {
+func NewLinker(fragment *Statement) *Linker {
 	return &Linker{
 		fragment: fragment,
 		symbols:  NewSymbolTable(),
@@ -73,7 +73,7 @@ func (l *Linker) Link() {
 	}
 }
 
-func (l *Linker) addPatch(frag *Fragment, expr Expr, size int) {
+func (l *Linker) addPatch(frag *Statement, expr Expr, size int) {
 	p := patch{
 		fragment: frag,
 		expr:     expr,
@@ -86,7 +86,7 @@ func (l *Linker) addPatch(frag *Fragment, expr Expr, size int) {
 	}
 }
 
-func (l *Linker) defineLabels(frag *Fragment) {
+func (l *Linker) defineLabels(frag *Statement) {
 	for _, label := range frag.labels {
 		// todo check we aren't redefining global symbol
 		l.symbols.AddSymbol(frag.file, frag.line, label)
@@ -94,7 +94,7 @@ func (l *Linker) defineLabels(frag *Fragment) {
 	}
 }
 
-func (l *Linker) errorf(frag *Fragment, format string, args ...interface{}) {
+func (l *Linker) errorf(frag *Statement, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	l.messages.Error(frag.file, frag.line, 0, msg)
 }
@@ -131,7 +131,7 @@ func (l *Linker) writeWordAt(val int, pc int) {
 	l.code[pc+1] = hi
 }
 
-func (l *Linker) doEquate(frag *Fragment) {
+func (l *Linker) doEquate(frag *Statement) {
 	if len(frag.labels) != 1 {
 		l.errorf(frag, "equate must have exactly one label")
 	}
@@ -141,9 +141,10 @@ func (l *Linker) doEquate(frag *Fragment) {
 		l.errorf(frag, "equate must have constant value")
 	}
 	l.symbols.Define(frag.labels[0], ival)
+	fmt.Printf("added %s -> %d\n", frag.labels[0], ival)
 }
 
-func (l *Linker) doOrg(frag *Fragment) {
+func (l *Linker) doOrg(frag *Statement) {
 	// org bumps to PC to a new location.  Error to go backwards.
 	ival, _, res := frag.operands[0].expr.computeValue(l.symbols) // todo equate must have 1 arg
 	if !res {
@@ -157,7 +158,7 @@ func (l *Linker) doOrg(frag *Fragment) {
 	}
 }
 
-func (l *Linker) doDefineWord(frag *Fragment) {
+func (l *Linker) doDefineWord(frag *Statement) {
 	l.defineLabels(frag)
 	for _, operand := range frag.operands {
 		if operand.mode != machine2.Absolute {
@@ -178,7 +179,7 @@ func (l *Linker) doDefineWord(frag *Fragment) {
 	}
 }
 
-func (l *Linker) doDefineByte(frag *Fragment) {
+func (l *Linker) doDefineByte(frag *Statement) {
 	l.defineLabels(frag)
 	for _, operand := range frag.operands {
 		if operand.mode != machine2.Absolute {
@@ -198,7 +199,7 @@ func (l *Linker) doDefineByte(frag *Fragment) {
 	}
 }
 
-func (l *Linker) doDefineSpace(frag *Fragment) {
+func (l *Linker) doDefineSpace(frag *Statement) {
 	l.defineLabels(frag)
 	if len(frag.operands) != 1 {
 		l.errorf(frag, "ds requires a single operand")
@@ -222,7 +223,7 @@ func (l *Linker) doDefineSpace(frag *Fragment) {
 	}
 }
 
-func (l *Linker) doEmit2Operand(frag *Fragment) {
+func (l *Linker) doEmit2Operand(frag *Statement) {
 	l.defineLabels(frag)
 	if len(frag.operands) != 2 {
 		l.errorf(frag, "expected 2 operands")
@@ -237,7 +238,7 @@ func (l *Linker) doEmit2Operand(frag *Fragment) {
 	l.resolveWordOperand(frag, op2)
 }
 
-func (l *Linker) doEmit1Operand(frag *Fragment) {
+func (l *Linker) doEmit1Operand(frag *Statement) {
 	l.defineLabels(frag)
 	if len(frag.operands) != 1 {
 		l.errorf(frag, "expected 1 operand")
@@ -250,7 +251,7 @@ func (l *Linker) doEmit1Operand(frag *Fragment) {
 	l.resolveWordOperand(frag, op1)
 }
 
-func (l *Linker) doEmitJump(frag *Fragment) {
+func (l *Linker) doEmitJump(frag *Statement) {
 	if len(frag.operands) != 1 {
 		l.errorf(frag, "expected 1 operand")
 		return
@@ -260,7 +261,7 @@ func (l *Linker) doEmitJump(frag *Fragment) {
 	l.doEmit1Operand(frag)
 }
 
-func (l *Linker) doEmit0Operand(frag *Fragment) {
+func (l *Linker) doEmit0Operand(frag *Statement) {
 	l.defineLabels(frag)
 	if len(frag.operands) != 0 {
 		l.errorf(frag, "expected 0 operands, got %d", len(frag.operands))
@@ -271,7 +272,7 @@ func (l *Linker) doEmit0Operand(frag *Fragment) {
 	l.writeByte(int(opCode))
 }
 
-func (l *Linker) resolveWordOperand(frag *Fragment, op *Operand) {
+func (l *Linker) resolveWordOperand(frag *Statement, op *Operand) {
 	ival, bval, res := op.expr.computeValue(l.symbols)
 	if res {
 		if bval != nil {
@@ -284,7 +285,7 @@ func (l *Linker) resolveWordOperand(frag *Fragment, op *Operand) {
 	}
 }
 
-func (l *Linker) BytesFor(frag *Fragment) []byte {
+func (l *Linker) BytesFor(frag *Statement) []byte {
 	return l.code[frag.pcStart:frag.pcEnd]
 }
 

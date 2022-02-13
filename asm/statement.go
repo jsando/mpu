@@ -6,10 +6,12 @@ import (
 	"strings"
 )
 
-// Fragment represents a single directive or instructions.
+// Statement represents a single directive or instruction.
 // They form a linked list.
-type Fragment struct {
-	next      *Fragment
+// The parser uses the lexer to create the list of statements,
+// which are then fed to the linker to generate the machine code.
+type Statement struct {
+	next      *Statement
 	file      string
 	line      int
 	labels    []string  //optional labels
@@ -19,17 +21,9 @@ type Fragment struct {
 	pcEnd     int
 }
 
-func (f Fragment) String() string {
+func (f Statement) String() string {
 	return fmt.Sprintf("%s: %s", strings.Join(f.labels, ","), f.operation)
 }
-
-type AddressMode int
-
-const (
-	ImmediateMode AddressMode = iota
-	AbsoluteMode
-	IndirectMode
-)
 
 type Operand struct {
 	mode machine2.AddressMode
