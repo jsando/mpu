@@ -1,6 +1,5 @@
-pc:	    dw main
-sp:	    dw 0xffff
-fp:     dw 0
+pc:	dw main
+sp:	dw 0xffff
 
 	    org 0x100
 
@@ -14,14 +13,14 @@ main:
         db 0
 
 atoi:
-ptrResult:   =   [sp+2]
-temp:        =   [sp+4]
+ptrResult:   =   2
+temp:        =   4
 
         cpy     ptrResult, result
 loop:
-        cpy     temp, value
+        cpy     [sp+temp], value
         seb
-        rem     temp, #10
+        rem     [sp+temp], #10
         add     temp, #'0'
         cpy     *ptrResult, temp
         clb

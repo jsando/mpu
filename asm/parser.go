@@ -35,7 +35,7 @@ func (p *Parser) Parse() {
 			break
 		}
 
-		// Local label definition?
+		// Local label or equate definition
 		if tok == TokDot {
 			tok = lexer.Next()
 			if tok != TokIdent {
@@ -43,9 +43,20 @@ func (p *Parser) Parse() {
 				lexer.skipToEOL()
 				continue
 			}
-			// define local label, associated to most recent global label
-			p.defineLocalLabel(lexer.s.TokenText())
+			tokenText := lexer.s.TokenText()
 			lexer.Next()
+
+			// If followed by '=', its a local equate
+			if p.lexer.tok == TokEquals {
+				p.lexer.Next()
+				fragment := p.newEquate(p.label + "." + tokenText)
+				operands := p.parseOperands()
+				fragment.operands = operands
+				continue
+			}
+
+			// define local label, associated to most recent global label
+			p.defineLocalLabel(tokenText)
 			continue
 		}
 
@@ -64,8 +75,7 @@ func (p *Parser) Parse() {
 			p.lexer.Next()
 			if p.lexer.tok == TokEquals {
 				p.lexer.Next()
-				fragment := p.newFragment(TokEquals)
-				fragment.labels = []string{text}
+				fragment := p.newEquate(text)
 				operands := p.parseOperands()
 				fragment.operands = operands
 				continue
@@ -100,6 +110,25 @@ func (p *Parser) newFragment(operation TokenType) *Statement {
 		p.last = fragment
 	}
 	p.pendingLabels = []string{}
+	return fragment
+}
+
+// newFragment creates a new fragment with all pending labels and links it
+// into the linked list.
+func (p *Parser) newEquate(id string) *Statement {
+	fragment := &Statement{
+		file:      p.lexer.s.Filename,
+		line:      p.lexer.line,
+		labels:    []string{id},
+		operation: TokEquals,
+	}
+	if p.first == nil {
+		p.first = fragment
+		p.last = fragment
+	} else {
+		p.last.next = fragment
+		p.last = fragment
+	}
 	return fragment
 }
 
@@ -264,7 +293,7 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		p.expect(TokRightParen)
 		p.lexer.Next()
 	case TokIdent:
-		expr = ExprIdent{ident: p.lexer.s.TokenText()}
+		expr = ExprIdent{ident: p.lexer.s.TokenText(), activeLabel: p.label}
 	case TokString:
 		expr = BytesLiteral{value: []byte(p.lexer.s.TokenText())}
 	case TokInt:

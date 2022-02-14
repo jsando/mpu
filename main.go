@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"github.com/jsando/lilac/asm"
@@ -58,6 +59,6 @@ func main() {
 		m := machine2.NewMachineFromSlice(bytes)
 		m.Run()
 		fmt.Printf("Program completed, memory dump:\n")
-		//fmt.Println(hex.Dump(m.Snapshot()))
+		fmt.Println(hex.Dump(m.Snapshot()))
 	}
 }

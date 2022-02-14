@@ -141,7 +141,6 @@ func (l *Linker) doEquate(frag *Statement) {
 		l.errorf(frag, "equate must have constant value")
 	}
 	l.symbols.Define(frag.labels[0], ival)
-	fmt.Printf("added %s -> %d\n", frag.labels[0], ival)
 }
 
 func (l *Linker) doOrg(frag *Statement) {

@@ -51,11 +51,16 @@ func (b BytesLiteral) computeValue(symbols *SymbolTable) (ival int, bval []byte,
 }
 
 type ExprIdent struct {
-	ident string
+	activeLabel string
+	ident       string
 }
 
 func (e ExprIdent) computeValue(symbols *SymbolTable) (ival int, bval []byte, resolved bool) {
-	sym := symbols.GetSymbol(e.ident)
+	sym := symbols.GetSymbol(e.activeLabel + "." + e.ident)
+	if sym != nil && sym.defined {
+		return sym.value, nil, true
+	}
+	sym = symbols.GetSymbol(e.ident)
 	if sym != nil && sym.defined {
 		return sym.value, nil, true
 	}

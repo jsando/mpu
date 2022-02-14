@@ -1,12 +1,72 @@
 # My todo list
 
-- [ ] equates aren't working
-- [ ] Have lister dump symbol table
-- [ ] Assembler needs to handle local labels
-- [ ] Fix the parser so labels don't need the trailing colon
-- [ ] Add 'Hlt' as opcode
-- [ ] Need a monitor to inspect memory, disassemble, etc
-- [ ] Some kind of character i/o would be fantastic
+- Need a monitor to inspect memory, disassemble, etc
+- Need waaaay better error detection and recovery, right now an invalid symbol will hang forever
+- Add 'Hlt' as opcode
+- Some kind of character i/o would be fantastic
+
+# System Monitor
+
+Based on the old apple 2 design.
+
+<addr> - display byte/word at addr
+<addr>.<addr> - display block
+<addr>l - list 20 instructions
+<addr>:val val val - assign val to addres
+<addr>G run program
+<addr>S step 1 instruction, show sp,pc,flags
+
+mpu -m file.bin - load file and enter monitor
+
+# Stack relative constants
+
+Want a way to easily declare and use local vars, using stack relative mode.
+
+- params
+- return value
+- local vars
+
+Suppose I have a function that takes two values and returns their sum.
+
+Stack: parm1, parm2, result, address, local1, local2, local3
+
+Caller:
+    psh parm1
+    psh parm2
+    psh #0
+    jsr function
+    pop result
+    clc
+    adc sp, 4 // discard input params
+
+Callee:
+    psh local1
+    psh local2
+    psh local3
+    local3 = sp+2
+    local2 = sp+4
+    local1 = sp+6
+    result = sp+10
+    parm2 = sp+12
+    parm1 = sp+14
+
+I can go a little higher level and generate all the stack frame shit, but that obscures the actual opcodes.
+
+func funcname(param1 dw, param2 dw):result dw
+    var local1 dw
+    var local2 dw
+    var local3 dw
+
+Can I just do local equates?
+
+func:
+.parm1 = 14
+.parm2 = 12
+.result = 10
+.local1 = 6
+.local2 = 4
+.local3 = 2
+    cpy [sp+parm1], #0
 
 
 Looking at this 6502 listing I like the feel of it:
@@ -208,10 +268,17 @@ Symbols are declared and equate to the current offset, unless defined by an equa
 
 symbol
 
-Local symbols are prefixed with '.' and are scoped to the previous symbol.
+Local labels are prefixed with '.' and are scoped to the previous symbol.
 
+foo:
 .l1
 .l2
+
+bar:
+.l1
+.l2
+
+currently I have bar.l1 defined ... resolving symbols however is only looking for 'l1'.  Maybe I should have it search first for bar.l1, then .l1?  Yes.  What do I need to make that work ... need to know the current global label in scope for each statement.
 
 ## Define space
 
