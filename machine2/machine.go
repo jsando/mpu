@@ -1,6 +1,9 @@
 package machine2
 
-import "fmt"
+import (
+	"fmt"
+	"io"
+)
 
 const (
 	PCAddr = 0
@@ -217,4 +220,84 @@ func (m *Machine) fetchOperand(mode AddressMode, pc int) (address, value int) {
 		value = m.ReadWord(address)
 	}
 	return
+}
+
+func (m *Machine) Dump(w io.Writer, start int, end int) {
+	ascii := make([]byte, 16)
+	charIndex := 0
+	flush := func() {
+		for charIndex < 16 {
+			ascii[charIndex] = ' '
+			charIndex++
+			fmt.Fprintf(w, "   ")
+		}
+		fmt.Fprintf(w, " |%s|\n", string(ascii))
+		charIndex = 0
+	}
+	for addr := start; addr <= end; addr++ {
+		if addr == start || charIndex == 16 {
+			if addr != start {
+				flush()
+			}
+			fmt.Fprintf(w, "%04x  ", addr)
+		}
+		fmt.Fprintf(w, "%02x ", m.memory[addr])
+		ch := m.memory[addr]
+		if ch >= 32 && ch <= 126 {
+			ascii[charIndex] = ch
+		} else {
+			ascii[charIndex] = '.'
+		}
+		charIndex++
+	}
+	flush()
+}
+
+// List will disassemble n instructions starting at addr, and return the
+// pc location following the last instruction.
+func (m *Machine) List(w io.Writer, addr int, n int) int {
+	for i := 0; i < n; i++ {
+		in := m.memory[addr]
+		op, m1, m2 := DecodeOp(in)
+		var value1 uint16
+		var value2 uint16
+		var opCount int
+		if op > Hlt && op < Inc {
+			opCount = 2
+			value1 = m.readUint16(addr + 1)
+			value2 = m.readUint16(addr + 3)
+			fmt.Fprintf(w, "0x%04x  %02x %02x %02x %02x %02x  %s %s,%s\n",
+				addr, m.memory[addr], m.memory[addr+1], m.memory[addr+2], m.memory[addr+3], m.memory[addr+4],
+				op, formatArg(m1, value1), formatArg(m2, value2))
+		} else if op > Hlt && op <= Jsr {
+			opCount = 1
+			value1 = m.readUint16(addr + 1)
+			fmt.Fprintf(w, "0x%04x  %02x %02x %02x        %s %s\n",
+				addr, m.memory[addr], m.memory[addr+1], m.memory[addr+2],
+				op, formatArg(m1, value1))
+		} else {
+			opCount = 0
+			fmt.Fprintf(w, "0x%04x  %02x              %s\n",
+				addr, m.memory[addr], op)
+		}
+
+		addr += 2*opCount + 1
+	}
+	return addr
+}
+
+func formatArg(mode AddressMode, value uint16) string {
+	switch mode {
+	case Immediate:
+		return fmt.Sprintf("#0x%04x", value)
+	case Absolute:
+		return fmt.Sprintf("0x%04x", value)
+	case Indirect:
+		return fmt.Sprintf("*0x%04x", value)
+	case Relative:
+		return fmt.Sprintf("[sp+%d]", value)
+	case RelativeIndirect:
+		return fmt.Sprintf("*[sp+%d]", value)
+	}
+	return "none"
 }

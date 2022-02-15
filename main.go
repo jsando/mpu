@@ -1,17 +1,17 @@
 package main
 
 import (
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"github.com/jsando/lilac/asm"
-	machine2 "github.com/jsando/lilac/machine"
+	"github.com/jsando/lilac/machine2"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 )
 
 var inputPath = flag.String("i", "", "Input file")
+var sysmon = flag.Bool("m", false, "Open system monitor")
 
 func main() {
 	flag.Parse()
@@ -56,9 +56,13 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		m := machine2.NewMachineFromSlice(bytes)
-		m.Run()
-		fmt.Printf("Program completed, memory dump:\n")
-		fmt.Println(hex.Dump(m.Snapshot()))
+		m := machine2.NewMachine(bytes)
+		if *sysmon {
+			RunMonitor(m)
+		} else {
+			m.Run()
+			fmt.Printf("Program completed, memory dump:\n")
+			m.Dump(os.Stdout, 0, 65535)
+		}
 	}
 }
