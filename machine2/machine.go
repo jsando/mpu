@@ -3,6 +3,7 @@ package machine2
 import (
 	"fmt"
 	"io"
+	"os"
 )
 
 const (
@@ -20,6 +21,7 @@ type Machine struct {
 	zero     bool   // Zero flag, set true if last value had zero value.
 	carry    bool   // Carry flag
 	bytes    bool   // Bytes flag, if true then operations are on bytes instead of words
+	step     bool
 }
 
 func NewMachine(image []byte) *Machine {
@@ -192,6 +194,10 @@ func (m *Machine) Run() {
 		case Clc:
 			m.carry = false
 		}
+
+		if m.step {
+			break
+		}
 	}
 }
 
@@ -284,6 +290,30 @@ func (m *Machine) List(w io.Writer, addr int, n int) int {
 		addr += 2*opCount + 1
 	}
 	return addr
+}
+
+func (m *Machine) RunAt(addr int) {
+	m.step = false
+	m.pc = uint16(addr)
+	m.Run()
+}
+
+func (m *Machine) Step(addr int) int {
+	m.step = true
+	m.pc = uint16(addr)
+	m.List(os.Stdout, int(m.pc), 1)
+	m.Run()
+	m.step = false
+	fmt.Printf("[status pc=%04x sp=%04x n=%d z=%d c=%d b=%d]\n", m.pc, m.sp, boolInt(m.negative), boolInt(m.zero),
+		boolInt(m.carry), boolInt(m.bytes))
+	return int(m.pc)
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func formatArg(mode AddressMode, value uint16) string {

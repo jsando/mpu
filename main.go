@@ -58,7 +58,8 @@ func main() {
 		}
 		m := machine2.NewMachine(bytes)
 		if *sysmon {
-			RunMonitor(m)
+			monitor := &Monitor{machine: m}
+			monitor.Run()
 		} else {
 			m.Run()
 			fmt.Printf("Program completed, memory dump:\n")

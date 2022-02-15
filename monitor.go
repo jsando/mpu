@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+type Monitor struct {
+	machine *machine2.Machine
+	next    int // implied address if no address is provided
+}
+
 const welcome = `
  ------------------------------------------
 |   M P U   S y s t e m   M o n i t o r    |
@@ -19,13 +24,12 @@ const welcome = `
 
 d/dump [start [end]]
 l/list [start]
-set [address value [value]*]
 run address
 s/step [address]
+set [address value [value]*]
 
 */
-func RunMonitor(machine *machine2.Machine) {
-	next := 0
+func (m *Monitor) Run() {
 	fmt.Printf(welcome)
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
@@ -33,50 +37,88 @@ func RunMonitor(machine *machine2.Machine) {
 		if !scanner.Scan() {
 			break
 		}
-		cmd := strings.TrimSpace(scanner.Text())
-		if len(cmd) == 0 {
+		line := strings.TrimSpace(scanner.Text())
+		if len(line) == 0 {
 			continue
 		}
-		s := strings.Split(cmd, " ")
-		switch s[0] {
+		cmd := strings.Split(line, " ")
+
+		switch cmd[0] {
 		case "dump", "d":
-			start := next
-			end := start + 160 - 1
-			if len(s) > 1 {
-				i, err := parseInt(s[1])
-				if err != nil {
-					fmt.Printf("invalid addr (%s)\n", err)
-					continue
-				}
-				start = i
-				end = start + 160 - 1
-			}
-			if len(s) > 2 {
-				i, err := parseInt(s[2])
-				if err != nil {
-					fmt.Printf("invalid addr (%s)\n", err)
-					continue
-				}
-				end = i
-			}
-			if end < start {
-				end = start + 160 - 1
-			}
-			machine.Dump(os.Stdout, start, end)
-			next = end + 1
+			m.dump(cmd)
 		case "list", "l":
-			start := next
-			if len(s) > 1 {
-				i, err := parseInt(s[1])
-				if err != nil {
-					fmt.Printf("invalid addr (%s)\n", err)
-					continue
-				}
-				start = i
-			}
-			next = machine.List(os.Stdout, start, 20)
+			m.list(cmd)
+		case "run", "r":
+			m.run(cmd)
+		case "step", "s":
+			m.step(cmd)
 		}
 	}
+}
+
+func (m *Monitor) dump(cmd []string) {
+	start := m.next
+	end := start + 160 - 1
+	if len(cmd) > 1 {
+		i, err := parseInt(cmd[1])
+		if err != nil {
+			fmt.Printf("invalid addr (%cmd)\n", err)
+			return
+		}
+		start = i
+		end = start + 160 - 1
+	}
+	if len(cmd) > 2 {
+		i, err := parseInt(cmd[2])
+		if err != nil {
+			fmt.Printf("invalid addr (%cmd)\n", err)
+			return
+		}
+		end = i
+	}
+	if end < start {
+		end = start + 160 - 1
+	}
+	m.machine.Dump(os.Stdout, start, end)
+	m.next = end + 1
+}
+
+func (m *Monitor) list(cmd []string) {
+	start := m.next
+	if len(cmd) > 1 {
+		i, err := parseInt(cmd[1])
+		if err != nil {
+			fmt.Printf("invalid addr (%s)\n", err)
+		}
+		start = i
+	}
+	m.next = m.machine.List(os.Stdout, start, 20)
+}
+
+func (m *Monitor) run(cmd []string) {
+	addr := m.next
+	if len(cmd) > 1 {
+		i, err := parseInt(cmd[1])
+		if err != nil {
+			fmt.Printf("invalid addr (%s)\n", err)
+			return
+		}
+		addr = i
+	}
+	m.machine.RunAt(addr)
+}
+
+func (m *Monitor) step(cmd []string) {
+	addr := m.next
+	if len(cmd) > 1 {
+		i, err := parseInt(cmd[1])
+		if err != nil {
+			fmt.Printf("invalid addr (%s)\n", err)
+			return
+		}
+		addr = i
+	}
+	m.next = m.machine.Step(addr)
 }
 
 func parseInt(s string) (int, error) {

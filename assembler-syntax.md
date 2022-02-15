@@ -4,11 +4,21 @@
 - Need waaaay better error detection and recovery, right now an invalid symbol will hang forever
 - Add 'Hlt' as opcode
 - Some kind of character i/o would be fantastic
+- Need to cleanup uint16 vs int everywhere, make up your mind
 
 # System Monitor
 
 Based on the old apple 2 design.
 
+command params
+
+d/dump [start [end]]
+l/list [start]
+set [address value [value]*]
+run address
+s/step [address]
+
+'exit' to quit.
 <addr> - display byte/word at addr
 <addr>.<addr> - display block
 <addr>l - list 20 instructions

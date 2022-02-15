@@ -2,7 +2,7 @@
 // First ever lilac test program!
 //-------------------------------------
 pc:	    dw main		// entry point
-sp:	    dw 0xffff	// stack pointer (grows down)
+sp:	    dw 0xfffe	// stack pointer (grows down)
 
 	    org 0x0100
 main:
