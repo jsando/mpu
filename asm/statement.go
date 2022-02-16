@@ -2,7 +2,7 @@ package asm
 
 import (
 	"fmt"
-	"github.com/jsando/lilac/machine2"
+	"github.com/jsando/lilac/machine"
 	"strings"
 )
 
@@ -26,7 +26,7 @@ func (f Statement) String() string {
 }
 
 type Operand struct {
-	mode machine2.AddressMode
+	mode machine.AddressMode
 	expr Expr
 }
 

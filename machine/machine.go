@@ -1,159 +1,130 @@
 package machine
 
-import "fmt"
-
-const (
-	ProgramCounter = 0
-	StackPointer   = 2
+import (
+	"fmt"
+	"io"
+	"os"
 )
 
-type Opcode byte
-
-// Opcode constants, from 0-15 (0x00-0x0f).
 const (
-	Add Opcode = iota
-	Sub
-	Mul
-	Div
-	Cmp
-	And
-	Or
-	Xor
-	Cpy
-	Psh
-	Pop
-	Jmp
-	Jeq
-	Jne
-	Jge
-	Jlt
+	PCAddr = 0
+	SPAddr = 2
 )
 
-var mnemonics = []string{
-	"add", "sub", "mul", "div", "cmp",
-	"and", "or", "xor", "cpy", "psh",
-	"pop", "jmp", "jeq", "jne", "jge",
-	"jlt",
-}
-
-func (o Opcode) String() string {
-	return mnemonics[o]
-}
-
-const (
-	OpcodeMask = 0b0000_1111
-	OpModeMask = 0b0111_0000
-	SizeMask   = 0b1000_0000
-)
-
-type OperandMode byte
-
-// Addressing mode constants, for bits 4-6.
-const (
-	ParamNone OperandMode = iota << 4
-	ParamImm
-	ParamAbsAbs
-	ParamAbsImm
-	ParamAbsInd
-	ParamIndAbs
-	ParamIndImm
-	ParamIndInd
-)
-
-type OperandSize byte
-
-// Instruction size modifier, encoded in bit 7.
-const (
-	SizeByte OperandSize = 0b1000_0000
-	SizeWord OperandSize = 0
-)
-
+// Machine implements MPU ... memory processing unit.
+// It supports 27 instructions and 6 addressing modes.
 type Machine struct {
-	memory   [65536]byte
-	negative bool
-	zero     bool
+	memory   []byte // 64kb of memory
+	pc       uint16 // program counter ... shadowed to address $0
+	sp       uint16 // stack pointer ... shadowed to address $2
+	negative bool   // Negative flag, set true if last value had the high bit set.
+	zero     bool   // Zero flag, set true if last value had zero value.
+	carry    bool   // Carry flag
+	bytes    bool   // Bytes flag, if true then operations are on bytes instead of words
+	step     bool
 }
 
-func NewMachine() *Machine {
-	return &Machine{}
-}
-
-func NewMachineFromSlice(buf []byte) *Machine {
-	m := NewMachine()
-	for i := 0; i < len(buf); i++ {
-		m.memory[i] = buf[i]
+func NewMachine(image []byte) *Machine {
+	m := &Machine{
+		memory: make([]byte, 65536),
+		pc:     0x100,
+		sp:     0xffff,
 	}
+	copy(m.memory, image)
+	m.pc = m.readUint16(PCAddr)
+	m.sp = m.readUint16(SPAddr)
 	return m
 }
 
-func (m *Machine) PC() int {
-	return m.ReadWord(0)
+func (m *Machine) readUint16(addr int) uint16 {
+	return uint16(m.memory[addr+1])<<8 + uint16(m.memory[addr])
 }
 
 func (m *Machine) ReadWord(addr int) int {
+	if addr == PCAddr {
+		return int(m.pc)
+	}
+	if addr == SPAddr {
+		return int(m.sp)
+	}
 	return int(m.memory[addr+1])<<8 + int(m.memory[addr])
 }
 
 func (m *Machine) WriteWord(addr, value int) {
-	lo := byte(value & 0xff)
-	hi := byte(value >> 8 & 0xff)
-	m.memory[addr] = lo
-	m.memory[addr+1] = hi
+	if addr == PCAddr {
+		m.pc = uint16(value)
+	} else if addr == SPAddr {
+		m.sp = uint16(value)
+	} else {
+		lo := byte(value & 0xff)
+		hi := byte(value >> 8 & 0xff)
+		m.memory[addr] = lo
+		m.memory[addr+1] = hi
+	}
 }
 
 // Same as WriteWord but updates zero/minus flags
 func (m *Machine) writeTarget(addr, value int) {
-	m.WriteWord(addr, value)
-	m.updateFlags(value)
+	if m.bytes {
+		if addr == PCAddr || addr == SPAddr {
+			panic("attempt to write byte value to pc/sp")
+		}
+		m.memory[addr] = byte(value)
+		m.updateFlagsByte(value)
+	} else {
+		m.WriteWord(addr, value)
+		m.updateFlagsWord(value)
+	}
 	//fmt.Printf("  0x%0x <- 0x%0x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
 }
 
-func (m *Machine) updateFlags(value int) {
-	m.negative = value > 0x7fff || value < 0
+func (m *Machine) updateFlagsByte(value int) {
+	m.negative = value&0x80 != 0
 	m.zero = value == 0
 }
 
-func decodeOp(in byte) (opcode Opcode, mode OperandMode, size OperandSize) {
-	opcode = Opcode(in & OpcodeMask)
-	mode = OperandMode(in & OpModeMask)
-	size = OperandSize(in & SizeMask)
-	return
-}
-
-func EncodeOp(opcode Opcode, mode OperandMode, size OperandSize) byte {
-	return byte(opcode) | byte(mode) | byte(size)
+func (m *Machine) updateFlagsWord(value int) {
+	m.negative = value&0x8000 != 0
+	m.zero = value == 0
 }
 
 func (m *Machine) Run() {
 	for {
-		pc := m.PC()
-		in := m.memory[pc]
+		in := m.memory[m.pc]
 		if in == 0 {
 			return
 		}
-		opcode, mode, _ := decodeOp(in) // todo handle byte size
-		opCount := 2
-		if opcode > Cpy {
+		target := 0
+		value1 := 0
+		value2 := 0
+		opcode, m1, m2 := DecodeOp(in)
+		var opCount uint16
+		if opcode < Inc {
+			opCount = 2
+			target, value1 = m.fetchOperand(m1, int(m.pc+1))
+			_, value2 = m.fetchOperand(m2, int(m.pc+3))
+		} else if opcode <= Jsr {
 			opCount = 1
+			target, value1 = m.fetchOperand(m1, int(m.pc+1))
+		} else {
+			opCount = 0
 		}
-		n, target, value1, value2 := m.fetchOperands(mode, pc+1, opCount)
 
 		// trace output
 		//m.trace(pc, opcode, mode, target, value1, value2)
-
-		m.WriteWord(ProgramCounter, pc+n+1) // todo panic on pc overflow
+		m.pc = m.pc + 2*opCount + 1
 
 		switch opcode {
-		case Add:
+		case Add: // todo carry
 			m.writeTarget(target, value1+value2)
-		case Sub:
+		case Sub: // todo carry
 			m.writeTarget(target, value1-value2)
 		case Mul:
 			m.writeTarget(target, value1*value2)
 		case Div:
 			m.writeTarget(target, value1/value2)
 		case Cmp:
-			m.updateFlags(value1 - value2)
+			m.updateFlagsWord(value1 - value2)
 		case And:
 			m.writeTarget(target, value1&value2)
 		case Or:
@@ -162,159 +133,201 @@ func (m *Machine) Run() {
 			m.writeTarget(target, value1^value2)
 		case Cpy:
 			m.writeTarget(target, value2)
+		case Inc:
+			m.writeTarget(target, value1+1)
+		case Dec:
+			m.writeTarget(target, value1-1)
 		case Psh:
-			m.writeTarget(m.ReadWord(StackPointer), value1)
-			m.WriteWord(StackPointer, m.ReadWord(StackPointer)-2)
+			m.writeTarget(int(m.sp), value1)
+			if m.bytes {
+				m.sp -= 1
+			} else {
+				m.sp -= 2
+			}
 		case Pop:
-			m.WriteWord(StackPointer, m.ReadWord(StackPointer)+2)
-			m.writeTarget(target, m.ReadWord(m.ReadWord(StackPointer)))
+			if m.bytes {
+				m.sp += 1
+			} else {
+				m.sp += 2
+			}
+			m.writeTarget(target, m.ReadWord(int(m.sp)))
 		case Jmp:
-			m.WriteWord(ProgramCounter, value1)
+			m.pc = uint16(value1)
 		case Jeq:
 			if m.zero {
-				m.WriteWord(ProgramCounter, value1)
+				m.pc = uint16(value1)
 			}
 		case Jne:
 			if !m.zero {
-				m.WriteWord(ProgramCounter, value1)
+				m.pc = uint16(value1)
 			}
 		case Jge:
 			if !m.negative {
-				m.WriteWord(ProgramCounter, value1)
+				m.pc = uint16(value1)
 			}
 		case Jlt:
 			if m.negative {
-				m.WriteWord(ProgramCounter, value1)
+				m.pc = uint16(value1)
 			}
+		case Jcs:
+			if m.carry {
+				m.pc = uint16(value1)
+			}
+		case Jcc:
+			if !m.carry {
+				m.pc = uint16(value1)
+			}
+		case Jsr:
+			m.WriteWord(int(m.sp), int(m.pc))
+			m.sp -= 2
+			m.pc = uint16(value1)
+		case Ret:
+			m.sp += 2
+			addr := m.ReadWord(int(m.sp))
+			m.pc = uint16(addr)
+		case Seb:
+			m.bytes = true
+		case Clb:
+			m.bytes = false
+		case Sec:
+			m.carry = true
+		case Clc:
+			m.carry = false
+		}
+
+		if m.step {
+			break
 		}
 	}
-}
-
-func (m *Machine) fetchOperands(mode OperandMode, pc int, oCount int) (n int, target int, value1 int, value2 int) {
-	mode1, mode2 := getMode(mode)
-	n = 2
-	target, value1 = m.fetchOperand(mode1, pc)
-	if oCount > 1 {
-		n = 4
-		_, value2 = m.fetchOperand(mode2, pc+2)
-	}
-	return
 }
 
 func (m *Machine) fetchOperand(mode AddressMode, pc int) (address, value int) {
 	switch mode {
+	case Implied:
+		// nothing to do
 	case Immediate:
 		address = pc
 		value = m.ReadWord(pc)
+		return
 	case Absolute:
 		address = m.ReadWord(pc)
-		value = m.ReadWord(address)
 	case Indirect:
 		address = m.ReadWord(m.ReadWord(pc))
-		value = m.ReadWord(address)
+	case Relative:
+		address = m.ReadWord(pc) + m.ReadWord(SPAddr)
+	case RelativeIndirect:
+		address = m.ReadWord(m.ReadWord(pc) + m.ReadWord(SPAddr))
 	default:
 		panic(fmt.Sprintf("illegal address mode: %d", mode))
+	}
+	if m.bytes {
+		value = int(m.memory[address])
+	} else {
+		value = m.ReadWord(address)
 	}
 	return
 }
 
-func (m *Machine) trace(pc int, opcode Opcode, mode OperandMode, target int, value1 int, value2 int) {
-	var args string
-	if opcode < Psh {
-		// two-args operation
-		args = fmt.Sprintf("param1: %s, param2: %s",
-			formatArg(mode, 1, value1), formatArg(mode, 2, value2))
-	} else {
-		// single args opcode
-		args = fmt.Sprintf("param1: %s", formatArg(mode, 1, value1))
+func (m *Machine) Dump(w io.Writer, start int, end int) {
+	ascii := make([]byte, 16)
+	charIndex := 0
+	flush := func() {
+		for charIndex < 16 {
+			ascii[charIndex] = ' '
+			charIndex++
+			fmt.Fprintf(w, "   ")
+		}
+		fmt.Fprintf(w, " |%s|\n", string(ascii))
+		charIndex = 0
 	}
-	fmt.Printf("pc: 0x%04x %s target: 0x%04x, %s\n", pc, opcode, target, args)
+	for addr := start; addr <= end; addr++ {
+		if addr == start || charIndex == 16 {
+			if addr != start {
+				flush()
+			}
+			fmt.Fprintf(w, "%04x  ", addr)
+		}
+		fmt.Fprintf(w, "%02x ", m.memory[addr])
+		ch := m.memory[addr]
+		if ch >= 32 && ch <= 126 {
+			ascii[charIndex] = ch
+		} else {
+			ascii[charIndex] = '.'
+		}
+		charIndex++
+	}
+	flush()
 }
 
-func (m *Machine) Snapshot() []byte {
-	return m.memory[:]
+// List will disassemble n instructions starting at addr, and return the
+// pc location following the last instruction.
+func (m *Machine) List(w io.Writer, addr int, n int) int {
+	for i := 0; i < n; i++ {
+		in := m.memory[addr]
+		op, m1, m2 := DecodeOp(in)
+		var value1 uint16
+		var value2 uint16
+		var opCount int
+		if op > Hlt && op < Inc {
+			opCount = 2
+			value1 = m.readUint16(addr + 1)
+			value2 = m.readUint16(addr + 3)
+			fmt.Fprintf(w, "0x%04x  %02x %02x %02x %02x %02x  %s %s,%s\n",
+				addr, m.memory[addr], m.memory[addr+1], m.memory[addr+2], m.memory[addr+3], m.memory[addr+4],
+				op, formatArg(m1, value1), formatArg(m2, value2))
+		} else if op > Hlt && op <= Jsr {
+			opCount = 1
+			value1 = m.readUint16(addr + 1)
+			fmt.Fprintf(w, "0x%04x  %02x %02x %02x        %s %s\n",
+				addr, m.memory[addr], m.memory[addr+1], m.memory[addr+2],
+				op, formatArg(m1, value1))
+		} else {
+			opCount = 0
+			fmt.Fprintf(w, "0x%04x  %02x              %s\n",
+				addr, m.memory[addr], op)
+		}
+
+		addr += 2*opCount + 1
+	}
+	return addr
 }
 
-func formatArg(mode OperandMode, argNum int, argValue int) string {
-	m1, m2 := getMode(mode)
-	t := m1
-	if argNum == 2 {
-		t = m2
-	}
-	var format string
-	if t == Immediate {
-		format = "#0x%04x"
-	} else if t == Absolute {
-		format = "0x%04x"
-	} else if t == Indirect {
-		format = "*0x%04x"
-	}
-	return fmt.Sprintf(format, argValue)
+func (m *Machine) RunAt(addr int) {
+	m.step = false
+	m.pc = uint16(addr)
+	m.Run()
 }
 
-type AddressMode int
+func (m *Machine) Step(addr int) int {
+	m.step = true
+	m.pc = uint16(addr)
+	m.List(os.Stdout, int(m.pc), 1)
+	m.Run()
+	m.step = false
+	fmt.Printf("[status pc=%04x sp=%04x n=%d z=%d c=%d b=%d]\n", m.pc, m.sp, boolInt(m.negative), boolInt(m.zero),
+		boolInt(m.carry), boolInt(m.bytes))
+	return int(m.pc)
+}
 
-const (
-	None AddressMode = iota
-	Immediate
-	Absolute
-	Indirect
-)
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
 
-// getMode splits the instruction-encoded form into the separate modes for each arg.
-func getMode(mode OperandMode) (op1, op2 AddressMode) {
+func formatArg(mode AddressMode, value uint16) string {
 	switch mode {
-	case ParamNone:
-		return None, None
-	case ParamImm:
-		return Immediate, None
-	case ParamAbsAbs:
-		return Absolute, Absolute
-	case ParamAbsImm:
-		return Absolute, Immediate
-	case ParamAbsInd:
-		return Absolute, Indirect
-	case ParamIndAbs:
-		return Indirect, Absolute
-	case ParamIndImm:
-		return Indirect, Immediate
-	case ParamIndInd:
-		return Indirect, Indirect
+	case Immediate:
+		return fmt.Sprintf("#0x%04x", value)
+	case Absolute:
+		return fmt.Sprintf("0x%04x", value)
+	case Indirect:
+		return fmt.Sprintf("*0x%04x", value)
+	case Relative:
+		return fmt.Sprintf("[sp+%d]", value)
+	case RelativeIndirect:
+		return fmt.Sprintf("*[sp+%d]", value)
 	}
-	panic(fmt.Sprintf("invalid mode %d", mode))
-}
-
-func encodeOperandMode(m1, m2 AddressMode) OperandMode {
-	if m1 == Immediate {
-		return ParamImm
-	}
-	if m1 == Absolute {
-		if m2 == Immediate {
-			return ParamAbsImm
-		}
-		if m2 == Absolute {
-			return ParamAbsAbs
-		}
-		if m2 == Indirect {
-			return ParamAbsInd
-		}
-		if m2 == None {
-			return ParamAbsAbs
-		}
-	}
-	if m1 == Indirect {
-		if m2 == Immediate {
-			return ParamIndImm
-		}
-		if m2 == Absolute {
-			return ParamIndAbs
-		}
-		if m2 == Indirect {
-			return ParamIndInd
-		}
-		if m2 == None {
-			return ParamIndAbs
-		}
-	}
-	panic("invalid mode combination")
+	return "none"
 }

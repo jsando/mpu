@@ -1,6 +1,5 @@
 # My todo list
 
-- Need a monitor to inspect memory, disassemble, etc
 - Need waaaay better error detection and recovery, right now an invalid symbol will hang forever
 - Add 'Hlt' as opcode
 - Some kind of character i/o would be fantastic

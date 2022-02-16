@@ -2,7 +2,7 @@ package asm
 
 import (
 	"fmt"
-	"github.com/jsando/lilac/machine2"
+	"github.com/jsando/lilac/machine"
 )
 
 type Linker struct {
@@ -160,7 +160,7 @@ func (l *Linker) doOrg(frag *Statement) {
 func (l *Linker) doDefineWord(frag *Statement) {
 	l.defineLabels(frag)
 	for _, operand := range frag.operands {
-		if operand.mode != machine2.Absolute {
+		if operand.mode != machine.Absolute {
 			l.errorf(frag, "illegal operand mode for dw")
 			return
 		}
@@ -181,7 +181,7 @@ func (l *Linker) doDefineWord(frag *Statement) {
 func (l *Linker) doDefineByte(frag *Statement) {
 	l.defineLabels(frag)
 	for _, operand := range frag.operands {
-		if operand.mode != machine2.Absolute {
+		if operand.mode != machine.Absolute {
 			l.errorf(frag, "illegal operand mode for db")
 			return
 		}
@@ -205,7 +205,7 @@ func (l *Linker) doDefineSpace(frag *Statement) {
 		return
 	}
 	operand := frag.operands[0]
-	if operand.mode != machine2.Absolute {
+	if operand.mode != machine.Absolute {
 		l.errorf(frag, "invalid operand for ds")
 		return
 	}
@@ -231,7 +231,7 @@ func (l *Linker) doEmit2Operand(frag *Statement) {
 	op1 := frag.operands[0]
 	op2 := frag.operands[1]
 	op := tokToOp(frag.operation)
-	opCode := machine2.EncodeOp(op, op1.mode, op2.mode)
+	opCode := machine.EncodeOp(op, op1.mode, op2.mode)
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(frag, op1)
 	l.resolveWordOperand(frag, op2)
@@ -245,7 +245,7 @@ func (l *Linker) doEmit1Operand(frag *Statement) {
 	}
 	op1 := frag.operands[0]
 	op := tokToOp(frag.operation)
-	opCode := machine2.EncodeOp(op, op1.mode, machine2.Implied)
+	opCode := machine.EncodeOp(op, op1.mode, machine.Implied)
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(frag, op1)
 }
@@ -256,7 +256,7 @@ func (l *Linker) doEmitJump(frag *Statement) {
 		return
 	}
 	// override so we don't need # on all jumps
-	frag.operands[0].mode = machine2.Immediate
+	frag.operands[0].mode = machine.Immediate
 	l.doEmit1Operand(frag)
 }
 
@@ -267,7 +267,7 @@ func (l *Linker) doEmit0Operand(frag *Statement) {
 		return
 	}
 	op := tokToOp(frag.operation)
-	opCode := machine2.EncodeOp(op, machine2.Implied, machine2.Implied)
+	opCode := machine.EncodeOp(op, machine.Implied, machine.Implied)
 	l.writeByte(int(opCode))
 }
 
@@ -300,61 +300,61 @@ func (l *Linker) Code() []byte {
 	return l.code[0 : l.pc+1]
 }
 
-func tokToOp(tok TokenType) machine2.OpCode {
-	var op machine2.OpCode
+func tokToOp(tok TokenType) machine.OpCode {
+	var op machine.OpCode
 	switch tok {
 	case TokAdd:
-		op = machine2.Add
+		op = machine.Add
 	case TokSub:
-		op = machine2.Sub
+		op = machine.Sub
 	case TokMul:
-		op = machine2.Mul
+		op = machine.Mul
 	case TokDiv:
-		op = machine2.Div
+		op = machine.Div
 	case TokCmp:
-		op = machine2.Cmp
+		op = machine.Cmp
 	case TokAnd:
-		op = machine2.And
+		op = machine.And
 	case TokOr:
-		op = machine2.Or
+		op = machine.Or
 	case TokXor:
-		op = machine2.Xor
+		op = machine.Xor
 	case TokCpy:
-		op = machine2.Cpy
+		op = machine.Cpy
 	case TokPsh:
-		op = machine2.Psh
+		op = machine.Psh
 	case TokPop:
-		op = machine2.Pop
+		op = machine.Pop
 	case TokInc:
-		op = machine2.Inc
+		op = machine.Inc
 	case TokDec:
-		op = machine2.Dec
+		op = machine.Dec
 	case TokJmp:
-		op = machine2.Jmp
+		op = machine.Jmp
 	case TokJeq:
-		op = machine2.Jeq
+		op = machine.Jeq
 	case TokJne:
-		op = machine2.Jne
+		op = machine.Jne
 	case TokJge:
-		op = machine2.Jge
+		op = machine.Jge
 	case TokJlt:
-		op = machine2.Jlt
+		op = machine.Jlt
 	case TokJcc:
-		op = machine2.Jcc
+		op = machine.Jcc
 	case TokJcs:
-		op = machine2.Jcs
+		op = machine.Jcs
 	case TokJsr:
-		op = machine2.Jsr
+		op = machine.Jsr
 	case TokSec:
-		op = machine2.Sec
+		op = machine.Sec
 	case TokClc:
-		op = machine2.Clc
+		op = machine.Clc
 	case TokSeb:
-		op = machine2.Seb
+		op = machine.Seb
 	case TokClb:
-		op = machine2.Clb
+		op = machine.Clb
 	case TokRet:
-		op = machine2.Ret
+		op = machine.Ret
 	default:
 		panic("unknown opcode")
 	}

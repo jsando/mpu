@@ -11,7 +11,7 @@ import (
 func TestTokenizer(t *testing.T) {
 	str := `
 //-------------------------------------
-// First ever lilac test program!
+// First ever mpu test program!
 //-------------------------------------
 pc:	    dw main		// entry point
 sp:	    dw 0xffff	// stack pointer (grows down)
@@ -43,7 +43,7 @@ main:
 	fmt.Println()
 
 	WriteListing(strings.NewReader(str), os.Stdout, linker)
-	//machine := machine2.NewMachineFromSlice(linker.Code())
+	//machine := machine.NewMachineFromSlice(linker.Code())
 	//machine.Run()
 }
 

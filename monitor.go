@@ -3,14 +3,14 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/jsando/lilac/machine2"
+	"github.com/jsando/lilac/machine"
 	"os"
 	"strconv"
 	"strings"
 )
 
 type Monitor struct {
-	machine *machine2.Machine
+	machine *machine.Machine
 	next    int // implied address if no address is provided
 }
 

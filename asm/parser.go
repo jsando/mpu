@@ -2,7 +2,7 @@ package asm
 
 import (
 	"fmt"
-	"github.com/jsando/lilac/machine2"
+	"github.com/jsando/lilac/machine"
 	"strconv"
 	"strings"
 )
@@ -180,7 +180,7 @@ func (p *Parser) parseOperand() *Operand {
 	if tok == TokEOL {
 		return nil
 	}
-	mode := machine2.Absolute
+	mode := machine.Absolute
 	match := TokNone
 	if tok == TokStar {
 		if p.lexer.s.Peek() == '[' {
@@ -197,17 +197,17 @@ func (p *Parser) parseOperand() *Operand {
 			}
 			p.lexer.Next()
 			match = TokRightBracket
-			mode = machine2.RelativeIndirect
+			mode = machine.RelativeIndirect
 		} else {
-			mode = machine2.Indirect
+			mode = machine.Indirect
 			p.lexer.Next()
 		}
 	} else if tok == TokHash {
-		mode = machine2.Immediate
+		mode = machine.Immediate
 		p.lexer.Next()
 	} else if tok == TokLeftBracket {
 		match = TokRightBracket
-		mode = machine2.Relative
+		mode = machine.Relative
 		p.lexer.Next()
 		p.expect(TokIdent)
 		text := p.lexer.s.TokenText()

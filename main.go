@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/jsando/lilac/asm"
-	"github.com/jsando/lilac/machine2"
+	"github.com/jsando/lilac/machine"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -56,7 +56,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		m := machine2.NewMachine(bytes)
+		m := machine.NewMachine(bytes)
 		if *sysmon {
 			monitor := &Monitor{machine: m}
 			monitor.Run()

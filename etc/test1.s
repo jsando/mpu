@@ -1,5 +1,5 @@
 //-------------------------------------
-// First ever lilac test program!
+// First ever mpu test program!
 //-------------------------------------
 pc:	    dw main		// entry point
 sp:	    dw 0xfffe	// stack pointer (grows down)

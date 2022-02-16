@@ -1,4 +1,4 @@
-package machine2
+package machine
 
 import "fmt"
 
