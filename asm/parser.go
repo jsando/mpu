@@ -2,7 +2,7 @@ package asm
 
 import (
 	"fmt"
-	"github.com/jsando/lilac/machine"
+	"github.com/jsando/mpu/machine"
 	"strconv"
 	"strings"
 )

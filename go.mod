@@ -1,4 +1,4 @@
-module github.com/jsando/lilac
+module github.com/jsando/mpu
 
 go 1.16
 

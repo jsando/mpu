@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/jsando/lilac/machine"
+	"github.com/jsando/mpu/machine"
 	"os"
 	"strconv"
 	"strings"

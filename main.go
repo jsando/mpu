@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/jsando/lilac/asm"
-	"github.com/jsando/lilac/machine"
+	"github.com/jsando/mpu/asm"
+	"github.com/jsando/mpu/machine"
 	"io/ioutil"
 	"os"
 	"path/filepath"
