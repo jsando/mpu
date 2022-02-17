@@ -69,6 +69,18 @@ func TestReadWrite(t *testing.T) {
 	}
 }
 
+func TestReadByte(t *testing.T) {
+	machine := NewMachine([]byte{7 ^ 0xff + 1})
+	val := machine.ReadInt8(0)
+	if val != -7 {
+		t.Errorf("expected: -7, got: %d", val)
+	}
+	addr := offset(1000, -10)
+	if addr != 990 {
+		t.Errorf("expected: 990, got: %d", addr)
+	}
+}
+
 //func TestFetchOperands(t *testing.T) {
 //	tests := []struct {
 //		buf     []byte

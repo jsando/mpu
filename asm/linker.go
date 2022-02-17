@@ -50,8 +50,10 @@ func (l *Linker) Link() {
 			l.doEmit0Operand(frag)
 		case TokAdd, TokSub, TokMul, TokDiv, TokCmp, TokAnd, TokOr, TokXor, TokCpy:
 			l.doEmit2Operand(frag)
-		case TokJmp, TokJeq, TokJne, TokJge, TokJlt, TokJcc, TokJcs, TokJsr:
-			l.doEmitJump(frag)
+		case TokJmp, TokJsr:
+			l.doEmitAbsJump(frag)
+		case TokJeq, TokJne, TokJge, TokJlt, TokJcc, TokJcs:
+			l.doEmitRelJump(frag)
 		case TokInc, TokDec, TokPsh, TokPop:
 			l.doEmit1Operand(frag)
 		}
@@ -61,6 +63,9 @@ func (l *Linker) Link() {
 		ival, _, res := patch.expr.computeValue(l.symbols)
 		if res {
 			if patch.size == 1 {
+				if patch.fragment.operands[0].mode == machine.OffsetByte {
+					ival = patch.pc - ival
+				}
 				l.writeByteAt(ival, patch.pc)
 			} else if patch.size == 2 {
 				l.writeWordAt(ival, patch.pc)
@@ -250,13 +255,22 @@ func (l *Linker) doEmit1Operand(frag *Statement) {
 	l.resolveWordOperand(frag, op1)
 }
 
-func (l *Linker) doEmitJump(frag *Statement) {
+func (l *Linker) doEmitAbsJump(frag *Statement) {
 	if len(frag.operands) != 1 {
 		l.errorf(frag, "expected 1 operand")
 		return
 	}
 	// override so we don't need # on all jumps
 	frag.operands[0].mode = machine.Immediate
+	l.doEmit1Operand(frag)
+}
+
+func (l *Linker) doEmitRelJump(frag *Statement) {
+	if len(frag.operands) != 1 {
+		l.errorf(frag, "expected 1 operand")
+		return
+	}
+	frag.operands[0].mode = machine.OffsetByte
 	l.doEmit1Operand(frag)
 }
 
@@ -272,15 +286,32 @@ func (l *Linker) doEmit0Operand(frag *Statement) {
 }
 
 func (l *Linker) resolveWordOperand(frag *Statement, op *Operand) {
+	// technically I want ImmediateByte to be an unsigned int but ... ok for now to make them all int8
+	byteOp := false
+	switch op.mode {
+	case machine.ImmediateByte, machine.OffsetByte, machine.Relative, machine.RelativeIndirect:
+		byteOp = true
+	}
 	ival, bval, res := op.expr.computeValue(l.symbols)
 	if res {
 		if bval != nil {
 			l.errorf(frag, "expected int value, not []byte")
 			return
 		}
-		l.writeWord(ival)
+		if byteOp {
+			if op.mode == machine.OffsetByte {
+				ival = l.pc - ival
+			}
+			l.writeByte(ival)
+		} else {
+			l.writeWord(ival)
+		}
 	} else {
-		l.addPatch(frag, op.expr, 2)
+		if byteOp {
+			l.addPatch(frag, op.expr, 1)
+		} else {
+			l.addPatch(frag, op.expr, 2)
+		}
 	}
 }
 
@@ -355,6 +386,10 @@ func tokToOp(tok TokenType) machine.OpCode {
 		op = machine.Clb
 	case TokRet:
 		op = machine.Ret
+	case TokRst:
+		op = machine.Rst
+	case TokSav:
+		op = machine.Sav
 	default:
 		panic("unknown opcode")
 	}

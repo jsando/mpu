@@ -189,8 +189,8 @@ func (p *Parser) parseOperand() *Operand {
 			p.lexer.Next() // consumer 'sp'
 			p.expect(TokIdent)
 			text := p.lexer.s.TokenText()
-			if text != "sp" {
-				p.errorf("expected 'sp', got %s", text)
+			if text != "fp" {
+				p.errorf("expected 'fp', got %s", text)
 			}
 			if p.messages.errors > 0 {
 				return nil
@@ -211,8 +211,8 @@ func (p *Parser) parseOperand() *Operand {
 		p.lexer.Next()
 		p.expect(TokIdent)
 		text := p.lexer.s.TokenText()
-		if text != "sp" {
-			p.errorf("expected 'sp', got %s", text)
+		if text != "fp" {
+			p.errorf("expected 'fp', got %s", text)
 		}
 		if p.messages.errors > 0 {
 			return nil

@@ -8,6 +8,8 @@ const (
 	Implied AddressMode = iota
 	Absolute
 	Immediate
+	ImmediateByte
+	OffsetByte
 	Indirect
 	Relative
 	RelativeIndirect
@@ -48,6 +50,7 @@ const (
 	Dec
 	Psh
 	Pop
+	Jsr
 	Jmp
 	Jeq
 	Jne
@@ -55,12 +58,13 @@ const (
 	Jlt
 	Jcc
 	Jcs
-	Jsr
 	Seb
 	Clb
 	Clc
 	Sec
 	Ret
+	Sav
+	Rst
 )
 
 var mnemonics = []string{
@@ -69,7 +73,7 @@ var mnemonics = []string{
 	"inc", "dec", "psh", "pop", "jmp",
 	"jeq", "jne", "jge", "jlt", "jcc",
 	"jcs", "jsr", "seb", "clb", "clc",
-	"sec", "ret",
+	"sec", "ret", "sav", "rst",
 }
 
 func (o OpCode) String() string {
@@ -117,9 +121,7 @@ The 8 jump instructions only support immediate mode.
 
 There are 5 instructions with implied mode.
 
-Push supports all 5 modes.
-
-Pop supports all but immediate.
+Push supports all 5 modes.  Pop with immediate value pops and discards that number of bytes.
 
 */
 var opTable = []Encoding{
@@ -306,6 +308,8 @@ var opTable = []Encoding{
 	{op: Seb},
 	{op: Clb},
 	{op: Ret},
+	{op: Rst},
+	{op: Sav, m1: ImmediateByte},
 
 	0xC0: {op: Psh, m1: Indirect},
 	{op: Pop, m1: Indirect},
@@ -343,14 +347,15 @@ var opTable = []Encoding{
 	{op: Pop, m1: RelativeIndirect},
 	{op: Inc, m1: RelativeIndirect},
 	{op: Dec, m1: RelativeIndirect},
+	{op: Jmp, m1: Immediate},
+	{op: Jeq, m1: OffsetByte},
+	{op: Jne, m1: OffsetByte},
+	{op: Jge, m1: OffsetByte},
+	{op: Jlt, m1: OffsetByte},
+	{op: Jcc, m1: OffsetByte},
+	{op: Jcs, m1: OffsetByte},
+	{op: Jsr, m1: Immediate},
 
 	0xF0: {op: Psh, m1: Immediate},
-	{op: Jmp, m1: Immediate},
-	{op: Jeq, m1: Immediate},
-	{op: Jne, m1: Immediate},
-	{op: Jge, m1: Immediate},
-	{op: Jlt, m1: Immediate},
-	{op: Jcc, m1: Immediate},
-	{op: Jcs, m1: Immediate},
-	{op: Jsr, m1: Immediate},
+	{op: Pop, m1: ImmediateByte},
 }
