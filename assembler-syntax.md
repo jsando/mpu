@@ -1,10 +1,9 @@
 # My todo list
 
-- Add frame pointer, sav/rst, pop #imm
-- Function declaration syntax with auto-fp relative calculations
-    - Process local decls
-    - Generate proper sav/rst
-- Fix sp so it always points to the last byte written to the stack, ie it can start at 0000 and the first push is at 0xffff
+- monitor disassembly is broken, pop # s/b 1 byte, sav takes 1 immediate byte
+    - branches are wrong, still expecting 2 bytes
+    - 
+- a gofmt-equivalent would be nice
 - monitor needs a way to view stack contents ... not sure how though unless we know whether they are bytes or words
 - could I actually build a debugger that could inspect variables?
 - Add include directive so I can start building reusable functions

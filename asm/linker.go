@@ -311,6 +311,9 @@ func (l *Linker) doEmit1Operand(frag *Statement) {
 		l.errorf(frag, "within functions, asm generates automatic SAV")
 		return
 	}
+	if op == machine.Pop && op1.mode == machine.Immediate {
+		op1.mode = machine.ImmediateByte
+	}
 	opCode := machine.EncodeOp(op, op1.mode, machine.Implied)
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(frag, op1)

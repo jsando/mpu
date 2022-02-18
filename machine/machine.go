@@ -43,6 +43,11 @@ func (m *Machine) readUint16(addr uint16) uint16 {
 	return uint16(m.memory[addr+1])<<8 + uint16(m.memory[addr])
 }
 
+func (m *Machine) writeUint16(addr uint16, val uint16) {
+	m.memory[addr] = byte(val & 0xff)
+	m.memory[addr+1] = byte(val >> 8 & 0xff)
+}
+
 func (m *Machine) ReadInt8(addr int) int {
 	return int(int8(m.memory[addr]))
 }
@@ -68,10 +73,8 @@ func (m *Machine) WriteWord(addr, value int) {
 	} else if addr == FPAddr {
 		m.fp = uint16(value)
 	} else {
-		lo := byte(value & 0xff)
-		hi := byte(value >> 8 & 0xff)
-		m.memory[addr] = lo
-		m.memory[addr+1] = hi
+		m.memory[addr] = byte(value & 0xff)
+		m.memory[addr+1] = byte(value >> 8 & 0xff)
 	}
 }
 
@@ -147,22 +150,22 @@ func (m *Machine) Run() {
 		case Dec:
 			m.writeTarget(target, value1-1)
 		case Psh:
-			m.writeTarget(int(m.sp), value1)
 			if m.bytes {
 				m.sp -= 1
 			} else {
 				m.sp -= 2
 			}
+			m.writeTarget(int(m.sp), value1)
 		case Pop:
 			if m1 == Immediate {
 				m.sp += uint16(value1)
 			} else {
+				m.writeTarget(target, m.ReadWord(int(m.sp)))
 				if m.bytes {
 					m.sp += 1
 				} else {
 					m.sp += 2
 				}
-				m.writeTarget(target, m.ReadWord(int(m.sp)))
 			}
 		case Jmp:
 			m.pc = uint16(value1)
@@ -222,18 +225,25 @@ func (m *Machine) Run() {
 }
 
 func (m *Machine) pushWord(value int) {
-	m.writeTarget(int(m.sp), value)
 	m.sp -= 2
+	m.writeTarget(int(m.sp), value)
 }
 
 func (m *Machine) popWord() int {
+	word := m.ReadWord(int(m.sp))
 	m.sp += 2
-	return m.ReadWord(int(m.sp))
+	return word
+}
+
+func (m *Machine) pushUint16(addr uint16) {
+	m.sp -= 2
+	m.writeUint16(m.sp, addr)
 }
 
 func (m *Machine) popUint16() uint16 {
+	val := m.readUint16(m.sp)
 	m.sp += 2
-	return m.readUint16(m.sp)
+	return val
 }
 
 func offset(addr uint16, offset int) uint16 {
@@ -358,7 +368,7 @@ func (m *Machine) Step(addr int) int {
 	m.List(os.Stdout, int(m.pc), 1)
 	m.Run()
 	m.step = false
-	fmt.Printf("[status pc=%04x sp=%04x n=%d z=%d c=%d b=%d]\n", m.pc, m.sp, boolInt(m.negative), boolInt(m.zero),
+	fmt.Printf("[status pc=%04x sp=%04x fp=%04x n=%d z=%d c=%d b=%d]\n", m.pc, m.sp, m.fp, boolInt(m.negative), boolInt(m.zero),
 		boolInt(m.carry), boolInt(m.bytes))
 	return int(m.pc)
 }

@@ -58,22 +58,22 @@ const (
 	Jlt
 	Jcc
 	Jcs
+	Sav
 	Seb
 	Clb
 	Clc
 	Sec
 	Ret
-	Sav
 	Rst
 )
 
 var mnemonics = []string{
 	"hlt", "add", "sub", "mul", "div",
 	"and", "or", "xor", "cpy", "cmp",
-	"inc", "dec", "psh", "pop", "jmp",
-	"jeq", "jne", "jge", "jlt", "jcc",
-	"jcs", "jsr", "seb", "clb", "clc",
-	"sec", "ret", "sav", "rst",
+	"inc", "dec", "psh", "pop", "jsr",
+	"jmp", "jeq", "jne", "jge", "jlt",
+	"jcc", "jcs", "sav", "seb", "clb",
+	"clc", "sec", "ret", "rst",
 }
 
 func (o OpCode) String() string {
