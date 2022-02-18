@@ -14,6 +14,7 @@ type Symbol struct {
 	line    int
 	value   int
 	defined bool
+	fp      bool
 }
 
 func (s *SymbolTable) GetSymbol(text string) *Symbol {
@@ -37,4 +38,16 @@ func (s *SymbolTable) Define(text string, value int) {
 	}
 	sym.defined = true
 	sym.value = value
+}
+
+func (s *SymbolTable) AddFpSymbol(file string, line int, text string, offset int) {
+	symbol := &Symbol{
+		text:    text,
+		file:    file,
+		line:    line,
+		value:   offset,
+		defined: true,
+		fp:      true,
+	}
+	s.symbols[text] = symbol
 }

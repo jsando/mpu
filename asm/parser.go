@@ -28,68 +28,136 @@ func NewParser(lex *Lexer) *Parser {
 func (p *Parser) Parse() {
 	lexer := p.lexer
 	tok := lexer.Next()
+loop:
 	for {
-		// Skip blank lines or lines with only comments
 		tok = lexer.syncNextStmt()
-		if tok == TokEOF {
-			break
-		}
-
-		// Local label or equate definition
-		if tok == TokDot {
-			tok = lexer.Next()
-			if tok != TokIdent {
-				p.errorf("expected identifier, got: %s", tok)
-				lexer.skipToEOL()
-				continue
-			}
-			tokenText := lexer.s.TokenText()
-			lexer.Next()
-
-			// If followed by '=', its a local equate
-			if p.lexer.tok == TokEquals {
-				p.lexer.Next()
-				fragment := p.newEquate(p.label + "." + tokenText)
-				operands := p.parseOperands()
-				fragment.operands = operands
-				continue
-			}
-
-			// define local label, associated to most recent global label
-			p.defineLocalLabel(tokenText)
-			continue
-		}
-
-		if tok == TokIdent {
-			// label if followed by ':' (else it's a directive/opcode)
-			peek := lexer.s.Peek()
-			if peek == ':' {
-				p.defineLabel(lexer.s.TokenText())
-				lexer.s.Next()
-				lexer.Next()
-				continue
-			}
-
-			// If the next token is '=', its an equate .. otherwise its an opcode or directive
+		switch tok {
+		case TokEOF:
+			break loop
+		case TokDot:
+			p.parseLocalLabel()
+		case TokIdent:
 			text := lexer.s.TokenText()
-			p.lexer.Next()
-			if p.lexer.tok == TokEquals {
-				p.lexer.Next()
-				fragment := p.newEquate(text)
-				operands := p.parseOperands()
-				fragment.operands = operands
-				continue
-			}
 			tok = toKeyword(text)
 			if tok == TokIdent {
-				p.errorf("expected directive or opcode, got: %s", text)
-				lexer.skipToEOL()
-				continue
+				p.parseLabel()
+			} else {
+				fragment := p.newFragment(tok)
+				p.lexer.Next()
+				operands := p.parseOperands()
+				fragment.operands = operands
 			}
-			fragment := p.newFragment(tok)
-			operands := p.parseOperands()
-			fragment.operands = operands
 		}
+	}
+}
+
+func (p *Parser) parseLabel() {
+	text := p.lexer.s.TokenText()
+	tok := p.lexer.Next()
+	if tok == TokEquals {
+		p.lexer.Next()
+		fragment := p.newEquate(text)
+		operands := p.parseOperands()
+		fragment.operands = operands
+	} else if tok == TokColon {
+		p.defineLabel(text)
+		p.lexer.Next()
+	} else if tok == TokLeftParen {
+		p.parseFunctionDecl(text)
+	} else {
+		p.errorf("expected =, :, or (): after identifier")
+	}
+}
+
+func (p *Parser) parseFunctionDecl(text string) {
+	p.defineLabel(text)
+	p.lexer.Next()
+	frag := p.newFragment(TokFunction)
+	for p.lexer.tok != TokRightParen {
+		if p.lexer.tok != TokIdent {
+			p.errorf("expected: identifier, got: %s", p.lexer.tok)
+			p.lexer.skipToEOL()
+			return
+		}
+		id := p.lexer.s.TokenText()
+		tok := p.lexer.Next()
+		if tok != TokIdent {
+			p.errorf("expected: identifier, got: %s", p.lexer.tok)
+			p.lexer.skipToEOL()
+			return
+		}
+		var size int
+		sizeText := p.lexer.s.TokenText()
+		if sizeText == "word" {
+			size = 2
+		} else if sizeText == "byte" {
+			size = 1
+		} else {
+			p.errorf("expected 'word' or 'byte', got: %s", sizeText)
+			p.lexer.skipToEOL()
+			return
+		}
+		// ok we have id, size ... wtf do we do now
+		frag.AddFpArg(id, size)
+		tok = p.lexer.Next()
+		if tok != TokComma {
+			break
+		}
+		p.lexer.Next()
+	}
+	tok := p.lexer.Next()
+	if tok != TokColon {
+		p.errorf("expected ':', got: %s", p.lexer.s.TokenText())
+	}
+	p.lexer.Next()
+}
+
+func (p *Parser) parseLocalLabel() {
+	tok := p.lexer.Next()
+	if tok != TokIdent {
+		p.errorf("expected identifier, got: %s", tok)
+		p.lexer.skipToEOL()
+		return
+	}
+	tokenText := p.lexer.s.TokenText()
+	p.lexer.Next()
+
+	// If followed by '=', its a local equate
+	if p.lexer.tok == TokEquals {
+		p.lexer.Next()
+		fragment := p.newEquate(p.label + "." + tokenText)
+		operands := p.parseOperands()
+		fragment.operands = operands
+	} else if p.lexer.tok == TokIdent && p.lexer.s.TokenText() == "local" {
+		// if followed by 'local' it's a local decl ie fp relative
+		if p.last.operation != TokFunction {
+			p.errorf("'local' can only be used immediately after function declaration")
+			return
+		}
+		tok = p.lexer.Next()
+		if tok != TokIdent {
+			p.errorf("expected: identifier, got: %s", p.lexer.tok)
+			p.lexer.skipToEOL()
+			return
+		}
+		id := p.label + "." + tokenText
+		var size int
+		sizeText := p.lexer.s.TokenText()
+		if sizeText == "word" {
+			size = 2
+		} else if sizeText == "byte" {
+			size = 1
+		} else {
+			p.errorf("expected 'word' or 'byte', got: %s", sizeText)
+			p.lexer.skipToEOL()
+			return
+		}
+		// ok we have id, size ... wtf do we do now
+		p.last.AddFpLocal(id, size)
+		p.lexer.Next()
+	} else {
+		// define local label, associated to most recent global label
+		p.defineLocalLabel(tokenText)
 	}
 }
 
@@ -142,6 +210,15 @@ func (p *Parser) defineLocalLabel(text string) {
 		p.errorf("can't define local '%s', no global in scope", text)
 	}
 	p.pendingLabels = append(p.pendingLabels, p.label+"."+text)
+}
+
+func (p *Parser) defineLocalFpLabel(text string) {
+	if len(p.label) == 0 {
+		p.errorf("can't define local '%s', no global in scope", text)
+	}
+	//localName := p.label+"."+text
+	//p.pendingFpLabels = append(p.pendingFpLabels, localName)
+	panic("todo")
 }
 
 func (p *Parser) errorf(format string, a ...interface{}) {

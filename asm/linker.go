@@ -2,6 +2,8 @@ package asm
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/jsando/mpu/machine"
 )
 
@@ -9,6 +11,7 @@ type Linker struct {
 	fragment *Statement
 	symbols  *SymbolTable
 	messages *Messages
+	function *Statement // Pointer to statement if in function with automatic fp/sav/rst handling
 	pc       int
 	code     []byte
 	patches  []patch
@@ -35,6 +38,7 @@ func NewLinker(fragment *Statement) *Linker {
 func (l *Linker) Link() {
 	for frag := l.fragment; frag != nil; frag = frag.next {
 		frag.pcStart = l.pc
+		l.overrideFramePointerSymbols(frag)
 		switch frag.operation {
 		case TokEquals:
 			l.doEquate(frag)
@@ -46,7 +50,7 @@ func (l *Linker) Link() {
 			l.doDefineByte(frag)
 		case TokDs:
 			l.doDefineSpace(frag)
-		case TokSec, TokClc, TokSeb, TokClb, TokRet:
+		case TokSec, TokClc, TokSeb, TokClb, TokRet, TokRst:
 			l.doEmit0Operand(frag)
 		case TokAdd, TokSub, TokMul, TokDiv, TokCmp, TokAnd, TokOr, TokXor, TokCpy:
 			l.doEmit2Operand(frag)
@@ -54,8 +58,10 @@ func (l *Linker) Link() {
 			l.doEmitAbsJump(frag)
 		case TokJeq, TokJne, TokJge, TokJlt, TokJcc, TokJcs:
 			l.doEmitRelJump(frag)
-		case TokInc, TokDec, TokPsh, TokPop:
+		case TokInc, TokDec, TokPsh, TokPop, TokSav:
 			l.doEmit1Operand(frag)
+		case TokFunction:
+			l.doFunction(frag)
 		}
 		frag.pcEnd = l.pc
 	}
@@ -92,10 +98,17 @@ func (l *Linker) addPatch(frag *Statement, expr Expr, size int) {
 }
 
 func (l *Linker) defineLabels(frag *Statement) {
+	// todo check we aren't redefining symbols
+	global := false
 	for _, label := range frag.labels {
-		// todo check we aren't redefining global symbol
 		l.symbols.AddSymbol(frag.file, frag.line, label)
-		l.symbols.Define(frag.labels[0], l.pc)
+		l.symbols.Define(label, l.pc)
+		if !strings.ContainsAny(label, ".") {
+			global = true
+		}
+	}
+	if global {
+		l.function = nil
 	}
 }
 
@@ -227,6 +240,50 @@ func (l *Linker) doDefineSpace(frag *Statement) {
 	}
 }
 
+/*
+ *			1st param   fp+8
+ *			2nd param	fp+6
+ *			3rd param   fp+4
+ *			return addr	fp+2
+ *   fp --> saved fp
+ *	 		local-1		fp-2
+ *	 sp --> local-2		fp-4
+ */
+func (l *Linker) doFunction(frag *Statement) {
+	// define any labels, esp the global label for this function.
+	// it will emit a SAV at this address to make space for locals.
+	l.defineLabels(frag)
+	l.function = frag
+
+	// compute the fp offset for all params and locals and
+	// add them to the symbol table
+	offset := 0
+	localSize := 0
+	for _, local := range frag.fpLocals {
+		localSize += local.size
+		offset -= local.size
+		local.offset = offset
+		if offset < -128 {
+			l.errorf(frag, "fp local offset out of range (-1,-128): %d", offset)
+		}
+		l.symbols.AddFpSymbol(frag.file, frag.line, local.id, local.offset)
+	}
+	offset = 4
+	for i := len(frag.fpArgs) - 1; i >= 0; i-- {
+		arg := frag.fpArgs[i]
+		arg.offset = offset
+		if offset > 127 {
+			l.errorf(frag, "fp arg offset out of range (0,127): %d", offset)
+		}
+		l.symbols.AddFpSymbol(frag.file, frag.line, arg.id, arg.offset)
+		offset += arg.size
+	}
+	opCode := machine.EncodeOp(machine.Sav, machine.ImmediateByte, machine.Implied)
+	l.writeByte(int(opCode))
+	l.writeByte(localSize)
+	// todo: until another global symbol defined, must note we are in a function so rewrite 'ret' as 'rst', error if user has their own 'sav'
+}
+
 func (l *Linker) doEmit2Operand(frag *Statement) {
 	l.defineLabels(frag)
 	if len(frag.operands) != 2 {
@@ -250,6 +307,10 @@ func (l *Linker) doEmit1Operand(frag *Statement) {
 	}
 	op1 := frag.operands[0]
 	op := tokToOp(frag.operation)
+	if l.function != nil && op == machine.Sav {
+		l.errorf(frag, "within functions, asm generates automatic SAV")
+		return
+	}
 	opCode := machine.EncodeOp(op, op1.mode, machine.Implied)
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(frag, op1)
@@ -281,6 +342,9 @@ func (l *Linker) doEmit0Operand(frag *Statement) {
 		return
 	}
 	op := tokToOp(frag.operation)
+	if l.function != nil && op == machine.Ret {
+		op = machine.Rst
+	}
 	opCode := machine.EncodeOp(op, machine.Implied, machine.Implied)
 	l.writeByte(int(opCode))
 }
@@ -329,6 +393,20 @@ func (l *Linker) HasErrors() bool {
 
 func (l *Linker) Code() []byte {
 	return l.code[0 : l.pc+1]
+}
+
+func (l *Linker) overrideFramePointerSymbols(frag *Statement) {
+	for _, op := range frag.operands {
+		if op.mode == machine.Absolute {
+			if op.expr.hasFramePointerSymbols(l.symbols) {
+				op.mode = machine.Relative
+			}
+		} else if op.mode == machine.Indirect {
+			if op.expr.hasFramePointerSymbols(l.symbols) {
+				op.mode = machine.RelativeIndirect
+			}
+		}
+	}
 }
 
 func tokToOp(tok TokenType) machine.OpCode {

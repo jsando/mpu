@@ -37,6 +37,7 @@ const (
 	TokDw
 	TokDb
 	TokDs
+	TokLocal
 	TokAdd
 	TokSub
 	TokMul
@@ -65,6 +66,7 @@ const (
 	TokJcs
 	TokSav
 	TokRst
+	TokFunction
 	TokEOL
 )
 
@@ -75,13 +77,13 @@ var tokenImage = []string{
 	".", ":", "#", "*", ",",
 	"+", "-", "|", "^", "/",
 	"%", "<<", ">>", "(", ")", "[", "]",
-	"=", "org", "dw", "db", "ds",
+	"=", "org", "dw", "db", "ds", "local",
 	"add", "sub", "mul", "div", "cmp",
 	"and", "or", "xor", "cpy", "psh",
 	"pop", "jmp", "jeq", "jne", "jge",
 	"jlt", "inc", "dec", "jsr", "ret",
 	"clc", "sec", "clb", "seb", "jcc",
-	"jcs", "sav", "rst",
+	"jcs", "sav", "rst", "function()",
 	"<eol>",
 }
 

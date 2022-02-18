@@ -19,9 +19,31 @@ type Statement struct {
 	operands  []*Operand
 	pcStart   int
 	pcEnd     int
+	fpArgs    []*FpParam
+	fpLocals  []*FpParam
 }
 
-func (f Statement) String() string {
+type FpParam struct {
+	id     string
+	size   int
+	offset int // offset once assigned
+}
+
+func (f *Statement) AddFpArg(id string, size int) {
+	f.fpArgs = append(f.fpArgs, &FpParam{
+		id:   id,
+		size: size,
+	})
+}
+
+func (f *Statement) AddFpLocal(id string, size int) {
+	f.fpLocals = append(f.fpLocals, &FpParam{
+		id:   id,
+		size: size,
+	})
+}
+
+func (f *Statement) String() string {
 	return fmt.Sprintf("%s: %s", strings.Join(f.labels, ","), f.operation)
 }
 
@@ -32,10 +54,15 @@ type Operand struct {
 
 type Expr interface {
 	computeValue(symbols *SymbolTable) (ival int, bval []byte, resolved bool)
+	hasFramePointerSymbols(symbols *SymbolTable) bool
 }
 
 type IntLiteral struct {
 	value int
+}
+
+func (e IntLiteral) hasFramePointerSymbols(symbols *SymbolTable) bool {
+	return false
 }
 
 func (e IntLiteral) computeValue(symbols *SymbolTable) (ival int, bval []byte, resolved bool) {
@@ -46,6 +73,10 @@ type BytesLiteral struct {
 	value []byte
 }
 
+func (b BytesLiteral) hasFramePointerSymbols(symbols *SymbolTable) bool {
+	return false
+}
+
 func (b BytesLiteral) computeValue(symbols *SymbolTable) (ival int, bval []byte, resolved bool) {
 	return 0, b.value, true
 }
@@ -53,6 +84,18 @@ func (b BytesLiteral) computeValue(symbols *SymbolTable) (ival int, bval []byte,
 type ExprIdent struct {
 	activeLabel string
 	ident       string
+}
+
+func (e ExprIdent) hasFramePointerSymbols(symbols *SymbolTable) bool {
+	sym := symbols.GetSymbol(e.activeLabel + "." + e.ident)
+	if sym != nil && sym.defined {
+		return sym.fp
+	}
+	sym = symbols.GetSymbol(e.ident)
+	if sym != nil && sym.defined {
+		return sym.fp
+	}
+	return false
 }
 
 func (e ExprIdent) computeValue(symbols *SymbolTable) (ival int, bval []byte, resolved bool) {
@@ -73,6 +116,10 @@ type ExprUnary struct {
 	expr Expr
 }
 
+func (e ExprUnary) hasFramePointerSymbols(symbols *SymbolTable) bool {
+	return e.expr.hasFramePointerSymbols(symbols)
+}
+
 func (e ExprUnary) computeValue(symbols *SymbolTable) (ival int, bval []byte, resolved bool) {
 	// + is a noop, so only -
 	ival, bval, resolved = e.expr.computeValue(symbols)
@@ -87,6 +134,10 @@ type ExprBinary struct {
 	op    TokenType
 	expr1 Expr
 	expr2 Expr
+}
+
+func (e ExprBinary) hasFramePointerSymbols(symbols *SymbolTable) bool {
+	return e.expr1.hasFramePointerSymbols(symbols) || e.expr2.hasFramePointerSymbols(symbols)
 }
 
 func (e ExprBinary) computeValue(symbols *SymbolTable) (ival int, bval []byte, resolved bool) {
