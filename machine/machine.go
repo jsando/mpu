@@ -89,8 +89,8 @@ func (m *Machine) writeTarget(addr, value int) {
 	} else {
 		m.WriteWord(addr, value)
 		m.updateFlagsWord(value)
+		fmt.Printf("  0x%0x <- 0x%0x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
 	}
-	//fmt.Printf("  0x%0x <- 0x%0x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
 }
 
 func (m *Machine) updateFlagsByte(value int) {
@@ -109,20 +109,19 @@ func (m *Machine) Run() {
 		if in == 0 {
 			return
 		}
+		n := 0      // Number of bytes for each operand
+		bytes := 0  // Total count of operand bytes (to skip pc to next instruction)
 		target := 0 // the address being updated, ie often the address of value1
-		value1 := 0
-		value2 := 0
+		value1 := 0 // value of first operand, if any
+		value2 := 0 // value of second operand, if any
 		opCode, m1, m2 := DecodeOp(in)
-		bytes := 0
-		if opCode < Inc {
-			var b1, b2 int
-			target, value1, b1 = m.fetchOperand(m1, int(m.pc+1))
-			_, value2, b2 = m.fetchOperand(m2, int(m.pc+3))
-			bytes = b1 + b2
-		} else if opCode <= Jsr {
-			var b1 int
-			target, value1, b1 = m.fetchOperand(m1, int(m.pc+1))
-			bytes = b1
+		if m1 != Implied {
+			target, value1, n = m.fetchOperand(m1, int(m.pc+1))
+			bytes = n
+		}
+		if m2 != Implied {
+			_, value2, n = m.fetchOperand(m2, int(m.pc+1)+bytes)
+			bytes += n
 		}
 		m.pc = m.pc + uint16(bytes) + 1
 
@@ -157,7 +156,7 @@ func (m *Machine) Run() {
 			}
 			m.writeTarget(int(m.sp), value1)
 		case Pop:
-			if m1 == Immediate {
+			if m1 == ImmediateByte {
 				m.sp += uint16(value1)
 			} else {
 				m.writeTarget(target, m.ReadWord(int(m.sp)))
@@ -194,13 +193,13 @@ func (m *Machine) Run() {
 				m.pc = offset(m.pc, value1)
 			}
 		case Jsr:
-			m.pushWord(int(m.pc))
+			m.pushUint16(m.pc)
 			m.pc = uint16(value1)
 		case Ret:
 			m.pc = m.popUint16()
 		case Sav:
 			// push frame pointer, copy sp->fp, adjust stack for locals
-			m.pushWord(int(m.fp))
+			m.pushUint16(m.fp)
 			m.fp = m.sp
 			m.sp -= uint16(value1)
 		case Rst:
@@ -329,29 +328,29 @@ func (m *Machine) List(w io.Writer, addr int, n int) int {
 	for i := 0; i < n; i++ {
 		in := m.memory[addr]
 		op, m1, m2 := DecodeOp(in)
-		var value1 uint16
-		var value2 uint16
-		var opCount int
-		if op > Hlt && op < Inc {
-			opCount = 2
-			value1 = m.readUint16(uint16(addr + 1))
-			value2 = m.readUint16(uint16(addr + 3))
-			fmt.Fprintf(w, "0x%04x  %02x %02x %02x %02x %02x  %s %s,%s\n",
-				addr, m.memory[addr], m.memory[addr+1], m.memory[addr+2], m.memory[addr+3], m.memory[addr+4],
-				op, formatArg(m1, value1), formatArg(m2, value2))
-		} else if op > Hlt && op <= Jsr {
-			opCount = 1
-			value1 = m.readUint16(uint16(addr + 1))
-			fmt.Fprintf(w, "0x%04x  %02x %02x %02x        %s %s\n",
-				addr, m.memory[addr], m.memory[addr+1], m.memory[addr+2],
-				op, formatArg(m1, value1))
-		} else {
-			opCount = 0
-			fmt.Fprintf(w, "0x%04x  %02x              %s\n",
-				addr, m.memory[addr], op)
+		bytes := 0
+		var args string
+		if m1 != Implied && m2 != Implied {
+			op1, n := m.formatOperand(m1, addr+1)
+			bytes += n
+			op2, n := m.formatOperand(m2, addr+1+n)
+			bytes += n
+			args = op1 + "," + op2
+		} else if m1 != Implied && m2 == Implied {
+			op1, n := m.formatOperand(m1, addr+1)
+			bytes += n
+			args = op1
 		}
-
-		addr += 2*opCount + 1
+		fmt.Fprintf(w, "0x%04x  %02x ", addr, in)
+		for j := 0; j < 4; j++ {
+			if j < bytes {
+				fmt.Fprintf(w, "%02x ", m.memory[addr+j+1])
+			} else {
+				fmt.Fprintf(w, "   ")
+			}
+		}
+		fmt.Fprintf(w, "%s %s\n", op, args)
+		addr = addr + 1 + bytes
 	}
 	return addr
 }
@@ -380,18 +379,36 @@ func boolInt(b bool) int {
 	return 0
 }
 
-func formatArg(mode AddressMode, value uint16) string {
+func (m *Machine) formatOperand(mode AddressMode, pc int) (op string, bytes int) {
 	switch mode {
+	case Implied:
+		// nothing to do
 	case Immediate:
-		return fmt.Sprintf("#0x%04x", value)
+		op = fmt.Sprintf("#0x%04x", m.ReadWord(pc))
+		bytes = 2
+	case ImmediateByte:
+		op = fmt.Sprintf("#0x%02x", m.ReadInt8(pc))
+		bytes = 1
+	case OffsetByte:
+		value := m.ReadInt8(pc)
+		op = fmt.Sprintf("0x%04x (%d)", (pc-1)+value, value)
+		bytes = 1
 	case Absolute:
-		return fmt.Sprintf("0x%04x", value)
+		op = fmt.Sprintf("0x%04x", m.ReadWord(pc))
+		bytes = 2
 	case Indirect:
-		return fmt.Sprintf("*0x%04x", value)
+		op = fmt.Sprintf("*0x%04x", m.ReadWord(pc))
+		bytes = 2
 	case Relative:
-		return fmt.Sprintf("fp+%d", value)
+		value := m.ReadInt8(pc)
+		op = fmt.Sprintf("fp%+d", value)
+		bytes = 1
 	case RelativeIndirect:
-		return fmt.Sprintf("*fp+%d", value)
+		value := m.ReadInt8(pc)
+		op = fmt.Sprintf("*fp%+d", value)
+		bytes = 1
+	default:
+		panic(fmt.Sprintf("illegal address mode: %d", mode))
 	}
-	return "none"
+	return
 }
