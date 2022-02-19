@@ -70,7 +70,7 @@ func (l *Linker) Link() {
 		if res {
 			if patch.size == 1 {
 				if patch.fragment.operands[0].mode == machine.OffsetByte {
-					ival = patch.pc - ival
+					ival = ival - patch.pc + 1
 				}
 				l.writeByteAt(ival, patch.pc)
 			} else if patch.size == 2 {
@@ -367,7 +367,7 @@ func (l *Linker) resolveWordOperand(frag *Statement, op *Operand) {
 		}
 		if byteOp {
 			if op.mode == machine.OffsetByte {
-				ival = l.pc - ival
+				ival = ival - l.pc + 1
 			}
 			l.writeByte(ival)
 		} else {

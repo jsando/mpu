@@ -89,7 +89,7 @@ func (m *Machine) writeTarget(addr, value int) {
 	} else {
 		m.WriteWord(addr, value)
 		m.updateFlagsWord(value)
-		fmt.Printf("  0x%0x <- 0x%0x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
+		//fmt.Printf("  0x%0x <- 0x%0x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
 	}
 }
 
@@ -170,27 +170,27 @@ func (m *Machine) Run() {
 			m.pc = uint16(value1)
 		case Jeq:
 			if m.zero {
-				m.pc = offset(m.pc, value1)
+				m.pc = uint16(value1)
 			}
 		case Jne:
 			if !m.zero {
-				m.pc = offset(m.pc, value1)
+				m.pc = uint16(value1)
 			}
 		case Jge:
 			if !m.negative {
-				m.pc = offset(m.pc, value1)
+				m.pc = uint16(value1)
 			}
 		case Jlt:
 			if m.negative {
-				m.pc = offset(m.pc, value1)
+				m.pc = uint16(value1)
 			}
 		case Jcs:
 			if m.carry {
-				m.pc = offset(m.pc, value1)
+				m.pc = uint16(value1)
 			}
 		case Jcc:
 			if !m.carry {
-				m.pc = offset(m.pc, value1)
+				m.pc = uint16(value1)
 			}
 		case Jsr:
 			m.pushUint16(m.pc)
@@ -245,10 +245,6 @@ func (m *Machine) popUint16() uint16 {
 	return val
 }
 
-func offset(addr uint16, offset int) uint16 {
-	return uint16(int(addr) + offset)
-}
-
 func (m *Machine) fetchOperand(mode AddressMode, pc int) (address, value, bytes int) {
 	switch mode {
 	case Implied:
@@ -265,7 +261,7 @@ func (m *Machine) fetchOperand(mode AddressMode, pc int) (address, value, bytes 
 		return
 	case OffsetByte:
 		address = pc
-		value = address + m.ReadInt8(pc)
+		value = address - 1 + m.ReadInt8(pc)
 		bytes = 1
 		return
 	case Absolute:

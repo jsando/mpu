@@ -1,17 +1,25 @@
 # My todo list
 
-- monitor disassembly is broken, pop # s/b 1 byte, sav takes 1 immediate byte
-    - branches are wrong, still expecting 2 bytes
-    - 
-- a gofmt-equivalent would be nice
-- monitor needs a way to view stack contents ... not sure how though unless we know whether they are bytes or words
-- could I actually build a debugger that could inspect variables?
-- Add include directive so I can start building reusable functions
-- Is there a way to add unit tests?
 - Need waaaay better error detection and recovery, right now an invalid symbol will hang forever
 - Add 'Hlt' as opcode
+- Is there a way to add unit tests?
 - Some kind of character i/o would be fantastic
 - Need to cleanup uint16 vs int everywhere, make up your mind
+- cleanup
+    - lexer
+        - encapsulate Scanner completely ... find calls to lexer.s.foo and fix them
+        - would token category help?  directive, opcode, etc
+    - parser
+        - review all the parse functions and make sure they follow the same pattern ... do they call lexer.next?
+        - sometimes I use tok := lexer.next and sometimes lexer.tok
+    - machine
+        - make updating the flags more explicit so I don't accidentally use writeTarget() for updating the sp for example
+
+
+- monitor needs a way to view stack contents ... not sure how though unless we know whether they are bytes or words
+- could I actually build a debugger that could inspect variables?
+- a gofmt-equivalent would be nice
+- Add include directive so I can start building reusable functions
 
 # System Monitor
 
