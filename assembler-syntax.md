@@ -1,8 +1,121 @@
+# Memory Processing Unit (MPU)
+
+MPU is a (fake) 16 bit microprocessor, with a small enough instruction set to be easy to learn and play with.  It started as a 6502 emulator, but then evolved because hey that's been done a bunch before so why not try something different?
+
+It is named MPU because unlike real processors it has no registers ... all operations are directly on main memory.  Its not *strictly* true that there are NO registers, there is still a Program Counter, a Stack Pointer, and Frame Pointer but these are located in memory at address 0, 2, and 4 respectively.  There are also flags such as the carry flag, zero flag, negative flag ... which are not mapped to main memory.
+
+MPU features:
+
+* 16 bit address space
+* Instructions can operate on bytes or words
+* DMA hardware for display, file i/o, network, etc
+* Stack can be anywhere in memory and grows downward
+* Frame pointer makes it easy to write reusable/reentrant functions
+
+## Address Modes
+
+The following address modes are supported:
+
+* Implied - the operand(s) are implied by the instruction.  Ex, "ret" returns from subroutine using the address on the top of the stack.
+* Immediate - the operand(s) are constant values encoded following the instruction.  Usually indicated with a number sign in soure code, ie "#1000" means "the number 1000", as opposed to "the value at address location 1000".  Most instructions using immediate mode will use the '#' to indicate as such, however the jump instructions allow it to be omitted since they *only* work with immediate mode.
+* ImmediateByte - at least one instruction supports a single-byte immediate value and that is 'pop #', which pops and discards the given number of bytes from the stack.
+* OffsetByte - The operand is a relative offset from the current program counter to the jump target.  Used by conditional jumps, it means the jump can be +127/-128 bytes forward/backward.
+* Absolute - the operand(s) refer to the value at the given 16 bit memory address.  Ie, "0" means "the value stored at address 0, which would be the program counter (the address of the current instruction being executed).
+* Indirect - the operand(s) refer to an address, which contains an address which contains a value.  If memory locations 100 and 101 contain "20 20", and location 2020 contains "12 34", then *100 is 12 34.
+* Relative - frame pointer relative 8 bit offset. 
+* Relative Indirect - frame pointer relative 8 bit offset, as an indirect reference.
+
+One of the ways the 6502 reduced the number of bytes of a program was by leveraging "zero page" modes, which allowed a single byte to refer to a 16-bit pointer.  MPU gains a similar benefit by using frame-pointer relative addressing with a single byte.  The benefit over zero page is it makes it much easier to write reusable functions, since they aren't using global variables.
+
+Consider a 6502 with a zero page pointer to a value, adding a constant to a 16 bit value.
+
+    ptr = $10 // some zero page value
+    lda #0
+    sta ptr
+    lda #$20
+    sta ptr+1
+    clc
+    ldy #0
+    lda (ptr), y
+    adc #50
+    sta (ptr), y
+    iny
+    lda (ptr), y
+    adc #0
+    sta (ptr), y
+
+And the same in MPU, using fp relative-indirect mode.
+
+    cpy fp+2, #$2000
+    clc
+    adc *fp+2, #50
+
+The two relative modes using the frame pointer as a base.  The frame pointer can be directly manipulated by reading/writing to address 4, but better is to use the sav/rst opcodes.  The assembler also has a fp-automatic syntax that automates all of that.
+
+## Byte vs Word Modes
+
+MPU has a "bytes mode" flag, which can switch MPU into byte mode.  In this mode all instructions operate on bytes instead of words.  At startup, the bytes flag is cleared therefore at startup MPU always starts in word mode (16 bit).
+
+Words are stored low byte first.
+
+To enable bytes mode, use 'seb'.  To enable word mode, use 'clb'.  These instructions "set" or "clear" the bytes flag.
+
+## Flags
+
+All operations that update a value will update the flags, including pop/psh, cpy, add, and so on.
+
+* Carry
+* Zero
+* Negative
+* Bytes
+
+## Instructions
+
+Instructions that take two operands, such as 'add', perform the operation specified and store the result in the first operand.
+
+For example,
+
+    add a, b
+
+Is effectively:
+
+    a = a + b
+
+* Hlt - Halt processing.  If run from the command line this signals an exit.
+* Add - Add, with carry.  a += b
+* Sub - Subtract, with carry. a -= b
+* Mul - multiply. a *= b
+* Div - divide.  a /= b
+* And - bitwise and.  a &= b
+* Or - bitwise or.  a |= b
+* Xor - bitwise exclusive-or.  a ^= b
+* Cpy - copy. a = b
+* Cmp - Compare.  Its like sub but without storing the result, but it updates the flags.
+* Inc - Increment by 1.  Can use clc/add but this is shorter.
+* Dec - Decrement by 1.  Can use sec/sub but this is shorter.
+* Psh - Push operand on the stack.
+* Pop - Pop values off the stack.
+* Jsr - Jump to subroutine.  Pushes the return address on the stack, so ret/rst can return.
+* Jmp - Unconditional jump.  Like goto.  Operand is a 16 bit address.
+* Jeq - Jump if equal/zero.  Operand is 8 bit offset, max 127/-128.
+* Jne - Jump if not equal/not zero.  Operand is 8 bit offset, max 127/-128.
+* Jge - Jump if greater than or equal to.  Operand is 8 bit offset, max 127/-128.
+* Jlt - Jump if less than. Operand is 8 bit offset, max 127/-128.
+* Jcc - Jump if carry clear.  Operand is 8 bit offset, max 127/-128.
+* Jcs - Jump if carry set.  Operand is 8 bit offset, max 127/-128.
+* Sav - Save the framepointer, set it to the stack pointer, and allocate space for local vars (#bytes).
+* Seb - Set bytes mode flag.
+* Clb - Clear bytes mode flag.
+* Clc - Clear carry flag.
+* Sec - Set carry flag.
+* Ret - Return from subroutine, using 16 bit address on top of stack.
+* Rst - Restore framepointer and return from subroutine.
+
 # My todo list
 
 - Need waaaay better error detection and recovery, right now an invalid symbol will hang forever
 - Add 'Hlt' as opcode
-- Is there a way to add unit tests?
+- Is there a way to add unit tests?  That would make writing short programs much more fun and easy to test.
 - Some kind of character i/o would be fantastic
 - Need to cleanup uint16 vs int everywhere, make up your mind
 - cleanup
@@ -14,16 +127,36 @@
         - sometimes I use tok := lexer.next and sometimes lexer.tok
     - machine
         - make updating the flags more explicit so I don't accidentally use writeTarget() for updating the sp for example
-
-
 - monitor needs a way to view stack contents ... not sure how though unless we know whether they are bytes or words
 - could I actually build a debugger that could inspect variables?
 - a gofmt-equivalent would be nice
 - Add include directive so I can start building reusable functions
 
-# System Monitor
+# Input/Output
 
-Based on the old apple 2 design.
+- RNG
+    - [0, n)
+- Current time?  There are two purposes, one is to measure changes in time.  ms since 1970 is a big number, but ms since 2022 is smaller :) Or maybe 1/4 seconds is enough?  That would overflow a 16 bit word every 4 hours.
+- Graphics
+    - Clear screen (w/color)
+    - Set color
+    - Draw line
+    - Draw rect
+    - Fill rect
+
+Wondering if I can attach devices purely through DMA, with no ROM.  Its probably more flexible if I can have a function table for each device, and pass params on the stack ... but then those are all 'fake' addresses, a user won't be able to disassemble and see MPU code at those addresses (becaus I'm planning to build device drivers in Go).
+
+That means I need some kind of command packet format.  Then programs write those packets to the IO device.  Or, write the packet into main memory and tell the device the address.  For that matter, I don't need separate memory addresses for different devices ... that can be part of the packet.
+
+deviceId dw 0
+command  dw 0
+params   ds 50
+
+In this case the params are just structs of whatever each device/command expects.  Ah ... and the results can be DMA'd to the wherever the user wants them.
+
+At this point I think I'll put the IO hook into the first 16 bytes along with my other registers.
+
+# System Monitor
 
 command params
 
@@ -33,334 +166,9 @@ set [address value [value]*]
 run address
 s/step [address]
 
-mpu -m file.bin - load file and enter monitor
+mpu -i file.bin -m - load file and enter monitor
 
-# Stack relative constants
-
-Want a way to easily declare and use local vars, using stack relative mode.
-
-- params
-- return value
-- local vars
-
-Suppose I have a function that takes two values and returns their sum.
-
-Stack: parm1, parm2, result, address, local1, local2, local3
-
-Caller:
-    psh parm1
-    psh parm2
-    psh #0
-    jsr function
-    pop result
-    clc
-    adc sp, 4 // discard input params
-
-Callee:
-    psh local1
-    psh local2
-    psh local3
-    local3 = sp+2
-    local2 = sp+4
-    local1 = sp+6
-    result = sp+10
-    parm2 = sp+12
-    parm1 = sp+14
-
-I can go a little higher level and generate all the stack frame shit, but that obscures the actual opcodes.
-
-func funcname(param1 dw, param2 dw):result dw
-    var local1 dw
-    var local2 dw
-    var local3 dw
-
-Can I just do local equates?
-
-func:
-.parm1 = 14
-.parm2 = 12
-.result = 10
-.local1 = 6
-.local2 = 4
-.local3 = 2
-    cpy [sp+parm1], #0
-
-Here's a working example of this, and I *hate* it.  I just spent an hour trying to debug it, I had the offsets wrong because I was manipulating the stack.
-
-Also, I can't use the stack once these offsets are set.  I should be using a frame pointer rather than stack pointer .. which I kinda knew but plowed ahead.  
-
-So two problems ... I need a frame pointer, and easy way to set it up and restore it.  And, I need a better damn syntax than [sp+temp], [sp+a] because that shits unreadable.  Ideally I'd like to put them in a declaration somehow, let the assembler calculate all the fucking offsets, an I can just write some code.
-
-```
-// Compute the remainder of the two args on the stack.
-//  sp+2 temp
-//  sp+4 return address
-//  sp+6 b
-//  sp+8 a
-//  sp+10 result
-//     a - (a / b * b)
-// func remainder(out result word, a word, b word)
-remainder:
-    .temp = 2
-    .b  = 6
-    .a  = 8
-    .result = 10
-
-    sec
-    sub 0x02, #2
-    cpy [sp+temp], [sp+a]               // temp = a
-    div [sp+temp], [sp+b]               // temp /= b
-    mul [sp+temp], [sp+b]               // temp *= b
-    cpy [sp+result], [sp+a]             // result = a
-    sec
-    sub [sp+result], [sp+temp]
-    clc
-    add 0x02, #2 // discard temp
-    ret
-```
-
-Let me try some things:
-
-```
-// Compute the remainder of the two args on the stack.
-//     a - (a / b * b)
-remainder(result word, a word, b word):
-    .temp local word
-
-    // copy sp to fp, save fp, make space for locals
-    sav #2
-
-    cpy temp, a               // temp = a
-    div temp, b               // temp /= b
-    mul temp, b               // temp *= b
-    cpy result, a             // result = a
-    sec
-    sub result, temp          // result -= temp
-
-    // discard locals from stack, restore fp, ret
-    rst
-```
-
-In the above, the assembler would define the symbols to be local to 'remainder', and define them as fp relative offsets.  The defining the symbols is easy ... but I'll have to do something in the parser or linker to override the explicit mode (which looks like absolute).
-
-Is it confusing that it looks like absolute addressing, but is actually fp relative?  I don't think so ... its easy to see that the symbols being referred to are stack based.
-
-sav/rst could be auto-generated by the assembler.  Ie if there are params or local definitions, generate the sav as the first instruction, and replace 'ret' with 'rst'.
-
-// Compute the remainder of the two args on the stack.
-//     a - (a / b * b)
-remainder(result word, a word, b word):
-    .temp local word
-
-    cpy temp, a               // temp = a
-    div temp, b               // temp /= b
-    mul temp, b               // temp *= b
-    cpy result, a             // result = a
-    sec
-    sub result, temp          // result -= temp
-    ret
-
-As soon as we process any statement that isn't a local decl, we can finalize all their offsets.  It can be invalid to declare a local once any instructions are generated, if that helps.  Other labels are not statements, but in this case it generates a SAV instruction.  I could use the Statement to buffer up the labels.  Actually ... I need to do that to have the SAV in there.  Will have to add some junk to the Statement object to buffer this up.  Then the symbol definition part.
-
-Devil's advocate ... what if the callee is responsible for removing params from the stack, being careful to save the return address, and pushing the result?  The caller pushes parameters, calls the sub, then pops any result off the stack.  The work on the caller side is to save the return address somewhere (I can designate some address range as function locals), pop the args off, push the result, push the return address.  Or, just copy the saved return address to the pc.
-
-remainder:
-    .pc = 0x0000
-    .returnAddress = 50
-    .temp = 52
-    .a = 54
-    .b = 56
-    .result = 58
-
-    pop returnAddress
-    pop b
-    pop a
-    cpy temp, a               // temp = a
-    div temp, b               // temp /= b
-    mul temp, b               // temp *= b
-    cpy result, a             // result = a
-    sec
-    sub result, temp          // result -= temp
-    psh result
-    cpy pc, returnAddress     // return
-
-Sure, its 'doable', but it ain't *maintainable*.  I spent an hour debugging this simple function yesterday because I kept mislabeling the stack offsets.  
-
-# Memory Machine
-
-What if instead of an anemic 6502 register machine, I make one with no registers but that has a rich set of operators against memory?  All arithmetic and comparison instructions can be done on memory.  The program counter and stack pointer are located in memory.
-
-opcode op1 [,op2]
-
-op1 can be:
-    constant
-    memory
-    *memory
-op2 can be:
-    constant
-    memory
-    *memory
-    
-addw ox, -24 ' ox = ox - 24
-
-## Opcodes
-
-Arithmetic:
-
-* add: a += b
-* sub: a -= b 
-* mul: a *= b
-* div: a /= b
-* cmp: a - b
-
-Logical:
-* and: a &= b
-* or:  a |= b
-* xor: a ^= b
-
-Assignment:
-* cpy: a = b
-* psh: [sp++] = a
-* pop: a = [--sp]
-
-Flow Control:
-* jmp
-* jeq
-* jne
-* jge
-* jlt
-
-# Addressing Modes
-
-* Immediate: the value is copied directly
-
-Ex:
-    mov a, #27
-
-* Absolute: the target is a memory address
-
-    mov a, b
-
-* Indirect: the target is pointed to by a memory address
-
-    mov *a, *b
-
-3 modes, 20+ instructions, possibly 2 widths (byte vs word).
-
-none
-imm
-abs/abs
-abs/imm
-abs/ind
-ind/abs
-ind/imm
-ind/ind
-
-I can eliminate a few instructions by using memory to expose cpu "registers".  Ie, program counter, carry status, stack pointer, would all map to addresses.
-
-That reduces the instruction set to 16, leaving us one extra bit for byte/word size.
-
-Encoding:
-
-    MMMSIIII
-        M = Addressing mode
-        S = Word size
-        I = Instruction opcode
-
-I'm wishing now I had a stack-relative addressing mode for local vars, and a jsr/ret instruction.  Maybe I need to give up a single-byte encoding ... I don't need a 64k limit?  Oh ... yes I do.  I have 16 bit modes.
-
-Also ... if I use a lookup table I could use all 256 available instructions/modes.
-
-What I'm actually using right now:
-
-* 5 - 5 jump instructions using immediate mode
-* 45 - 9 binop instructions where arg1 can be abs or ind, and arg2 can be abs, ind, or immed (6 variations each)
-* 3 - psh imm, ind, abs
-* 2 - pop ind, abs
-
-That's only 55 instructions.  If I add the byte variation that's still only 110.  I can add another hundred ... but not if I use reserved bits for all this.
-
-Not every instruction supports byte mode.  An immediate mode byte should take only 1 byte of memory.  10 instructions can operate on bytes.
-
-Can I encode zero page addresses as a single byte?  Ugh.  That would be special opcodes.  Maybe worth it for the most common ones like add/sub/cpy.
-
-Hang on ... indirect is a modifier of abs/rel.  I would want relative, absolute, relative indirect, absolute indirect, immediate.
-
-Another option for handling different word sizes is to make that a mode, ie a set/clear word mode.  Based on the current mode it would operate on bytes vs words.  That frees up a lot more room for additional addressing modes or new instructions.
-
-Is it reasonable to require indirect via a local var?  Seems ok?  Then I could restrict the modes to:
-
-* Immediate (imm)
-* Absolute (abs)
-* Indirect (ind)
-* SP Relative (spr)
-* SP Relative Indirect (spri)
-
-abs, imm
-abs, abs
-abs, ind
-abs, spr
-abs, spri
-ind, imm
-ind, abs
-ind, ind
-ind, spr
-ind, spri
-spr, imm
-spr, abs
-spr, ind
-spr, spr
-spr, spri
-spri, imm
-spri, abs
-spri, ind
-spri, spr
-spri, spri
-
-The main 8 instructions.
-
-add
-sub
-mul
-div
-and
-or
-xor
-cpy
-
-Push supports all modes including immediate (so 5).
-
-psh
-
-Pop supports everything but immediate (so 4).
-
-pop
-
-These are just immediate. 7x1 = 7
-
-jmp
-jeq
-jne
-jge
-jlt
-jsr
-
-Possible chopping block:
-    * clc
-    * sec
-    * jcs
-    * jcc
-
-How about this wacky encoding idea ... opcode opmode operands
-    - opcode is the 1 byte instruction (so up to 256 instructions)
-    - opmode describes up to two params by address mode (so up to 16 modes!)
-        - could have zero page modes
-        - single byte vs word immediate mode
-
-Don't need an instruction lookup table.  Can parse operands totally separate from decoding the instruction.
-
-
-# Assembler Directives
+# Assembler
 
 ## Symbols & Local Symbols
 
@@ -382,14 +190,14 @@ currently I have bar.l1 defined ... resolving symbols however is only looking fo
 
 ## Define space
 
-    .ds <count>[, pattern]
-    .db number[, number] | string
-    .dw word
-    .eq
+ds <count>[, pattern]
+db number[, number] | string
+dw word
 
 ## Constants
 
-symbol = expression
+symbol = expression     // global
+.symbol = expression    // local
 
 ## Expressions
 
@@ -455,30 +263,7 @@ Example:
         ret
 ```
 
-This might be fun to envision as an Apple 2 type of machine?
-
-* 16 bit address space
-* Instructions can operate on bytes or words
-* DMA hardware for display, file i/o, network, etc
-
-It has a simple instruction set and addressing modes, but with all the operands being 16 bit addresses ... the instructions will require 1 byte for the opcode, and up to 4 bytes for operands.  Zero page on 6502 was precious just because you could save a byte. Meh, what the hell.
-
-Do I make a ROM that bootstraps your program?  Nah.  I think the program specifies its own load address.  The assembler creates an object file that represents the 64kb of memory at startup, like a ROM ... and that's what it runs.  Maybe you need to include something at org $fff0 that is a jump to your actual entry point.
-
-label: \n    - Associates label to current PC
-.label \n (local label associated to most recent global label)
-
-label: word arg[,arg]*
-word arg[,arg]*
-
-ident = expr
-ident:
-
-if we parse a '.', its a local label
-if we get ident, peek to see if there's a '=' or ':'
-    a ':' defines a global label
-    a '=' defines an equate
-    if neither in peekahead, it must be a opcode or directive
+## Assembly Grammar
 
 line :=
         label
@@ -511,36 +296,3 @@ PrimaryExpr :=
     | Identifier
     | Literal (int, String, Char)
 
-expressions have a type which ends up being basically integer or []byte.
-
-I need to build the AST tree for expressions, how to model that.
-
-The type can be: literal (string, int), symbol, unary (+/-) expr, or binary op expr.
-
-type Operand struct {
-    mode (immediate, indirect, absolute)
-    expr
-}
-
-type Expr interface {
-    computeType() -> integer, []byte
-}
-
-type ExprLiteral struct {
-
-}
-
-type ExprSymbol struct {
-    symbol
-}
-
-type ExprUnary struct {
-    op
-    expr
-}
-
-type ExprBinary struct {
-    op
-    expr1
-    expr2
-}

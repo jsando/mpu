@@ -10,6 +10,8 @@ const (
 	PCAddr = 0 // Program counter
 	SPAddr = 2 // Stack pointer, points to last byte written
 	FPAddr = 4 // Frame pointer
+	IOReq  = 6 // Address of I/O commands are written here to execute
+	IORes  = 8 // I/O status of last command, 0 = success, != 0 error
 )
 
 // Machine implements MPU ... memory processing unit.
@@ -24,19 +26,30 @@ type Machine struct {
 	carry    bool   // Carry flag
 	bytes    bool   // Bytes flag, if true then operations are on bytes instead of words
 	step     bool   // Single step mode, if true breaks after executing 1 instruction
+	devices  []IODevice
+}
+
+type IODevice interface {
+	Invoke(m *Machine, addr uint16) (err uint16)
 }
 
 func NewMachine(image []byte) *Machine {
 	m := &Machine{
-		memory: make([]byte, 65536),
-		pc:     0x100,
-		sp:     0xffff,
+		memory:  make([]byte, 65536),
+		pc:      0x100,
+		sp:      0xffff,
+		devices: make([]IODevice, 256),
 	}
 	copy(m.memory, image)
 	m.pc = m.readUint16(PCAddr)
 	m.sp = m.readUint16(SPAddr)
 	m.fp = m.readUint16(FPAddr)
+	m.RegisterDevice(&StdoutDevice{}, 1)
 	return m
+}
+
+func (m *Machine) RegisterDevice(device IODevice, deviceId int) {
+	m.devices[deviceId] = device
 }
 
 func (m *Machine) readUint16(addr uint16) uint16 {
@@ -66,16 +79,46 @@ func (m *Machine) ReadWord(addr int) int {
 }
 
 func (m *Machine) WriteWord(addr, value int) {
+	if addr < 16 {
+		m.doSpecialWriteWord(addr, value)
+	} else {
+		m.memory[addr] = byte(value & 0xff)
+		m.memory[addr+1] = byte(value >> 8 & 0xff)
+	}
+}
+
+func (m *Machine) doSpecialWriteWord(addr int, value int) {
 	if addr == PCAddr {
 		m.pc = uint16(value)
 	} else if addr == SPAddr {
 		m.sp = uint16(value)
 	} else if addr == FPAddr {
 		m.fp = uint16(value)
-	} else {
-		m.memory[addr] = byte(value & 0xff)
-		m.memory[addr+1] = byte(value >> 8 & 0xff)
+	} else if addr == IOReq {
+		m.execIORequest(value)
 	}
+}
+
+const (
+	ErrNoErr uint16 = iota
+	ErrInvalidDevice
+	ErrInvalidCommand
+	ErrIOError
+)
+
+func (m *Machine) execIORequest(addr int) {
+	deviceId := int(m.readUint16(uint16(addr)))
+	if deviceId >= len(m.devices) {
+		m.writeUint16(IORes, ErrInvalidDevice)
+		return
+	}
+	device := m.devices[deviceId]
+	if device == nil {
+		m.writeUint16(IORes, ErrInvalidDevice)
+		return
+	}
+	err := device.Invoke(m, uint16(addr))
+	m.writeUint16(IORes, err)
 }
 
 // Same as WriteWord but updates zero/minus flags
@@ -86,10 +129,11 @@ func (m *Machine) writeTarget(addr, value int) {
 		}
 		m.memory[addr] = byte(value)
 		m.updateFlagsByte(value)
+		//fmt.Printf("  0x%04x <- 0x%02x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
 	} else {
 		m.WriteWord(addr, value)
 		m.updateFlagsWord(value)
-		//fmt.Printf("  0x%0x <- 0x%0x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
+		//fmt.Printf("  0x%04x <- 0x%04x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
 	}
 }
 

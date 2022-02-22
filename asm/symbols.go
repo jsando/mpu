@@ -1,5 +1,7 @@
 package asm
 
+import "fmt"
+
 type SymbolTable struct {
 	symbols map[string]*Symbol
 }
@@ -29,10 +31,12 @@ func (s *SymbolTable) AddSymbol(file string, line int, text string) {
 		value: 0,
 	}
 	s.symbols[text] = symbol
+	fmt.Printf("add %s\n", text)
 }
 
 func (s *SymbolTable) Define(text string, value int) {
 	sym := s.GetSymbol(text)
+	fmt.Printf("define %s=%d\n", text, value)
 	if sym == nil {
 		// todo some kinda error
 	}
@@ -50,4 +54,5 @@ func (s *SymbolTable) AddFpSymbol(file string, line int, text string, offset int
 		fp:      true,
 	}
 	s.symbols[text] = symbol
+	fmt.Printf("addfp %s=%d\n", text, offset)
 }

@@ -65,12 +65,12 @@ func (p *Parser) parseLabel() {
 	} else if tok == TokLeftParen {
 		p.parseFunctionDecl(text)
 	} else {
-		p.errorf("expected =, :, or (): after identifier")
+		p.errorf("expected =, :, or (): after identifier '%s'", text)
 	}
 }
 
-func (p *Parser) parseFunctionDecl(text string) {
-	p.defineLabel(text)
+func (p *Parser) parseFunctionDecl(fnName string) {
+	p.defineLabel(fnName)
 	p.lexer.Next()
 	frag := p.newFragment(TokFunction)
 	for p.lexer.tok != TokRightParen {
@@ -79,7 +79,7 @@ func (p *Parser) parseFunctionDecl(text string) {
 			p.lexer.skipToEOL()
 			return
 		}
-		id := p.lexer.s.TokenText()
+		id := fnName + "." + p.lexer.s.TokenText()
 		tok := p.lexer.Next()
 		if tok != TokIdent {
 			p.errorf("expected: identifier, got: %s", p.lexer.tok)
@@ -372,7 +372,8 @@ func (p *Parser) parsePrimaryExpr() Expr {
 	case TokIdent:
 		expr = ExprIdent{ident: p.lexer.s.TokenText(), activeLabel: p.label}
 	case TokString:
-		expr = BytesLiteral{value: []byte(p.lexer.s.TokenText())}
+		bytes := []byte(p.lexer.s.TokenText())
+		expr = BytesLiteral{value: bytes[1 : len(bytes)-1]}
 	case TokInt:
 		text := p.lexer.s.TokenText()
 		var val int64
@@ -393,7 +394,7 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		}
 		expr = IntLiteral{value: int(val)}
 	case TokChar:
-		expr = IntLiteral{value: int(p.lexer.s.TokenText()[0])}
+		expr = IntLiteral{value: int(p.lexer.s.TokenText()[1])}
 	default:
 		// some kind of error
 		p.errorf("expected (expr), identifier, or literal (got %s)", p.lexer.tok)

@@ -62,8 +62,8 @@ func main() {
 			monitor.Run()
 		} else {
 			m.Run()
-			fmt.Printf("Program completed, memory dump:\n")
-			m.Dump(os.Stdout, 0, 65535)
+			//fmt.Printf("Program completed, memory dump:\n")
+			//m.Dump(os.Stdout, 0, 65535)
 		}
 	}
 }

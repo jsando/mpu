@@ -66,6 +66,7 @@ const (
 	TokJcs
 	TokSav
 	TokRst
+	TokHlt
 	TokFunction
 	TokEOL
 )
@@ -83,7 +84,7 @@ var tokenImage = []string{
 	"pop", "jmp", "jeq", "jne", "jge",
 	"jlt", "inc", "dec", "jsr", "ret",
 	"clc", "sec", "clb", "seb", "jcc",
-	"jcs", "sav", "rst", "function()",
+	"jcs", "sav", "rst", "hlt", "function()",
 	"<eol>",
 }
 

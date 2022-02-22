@@ -50,7 +50,7 @@ func (l *Linker) Link() {
 			l.doDefineByte(frag)
 		case TokDs:
 			l.doDefineSpace(frag)
-		case TokSec, TokClc, TokSeb, TokClb, TokRet, TokRst:
+		case TokSec, TokClc, TokSeb, TokClb, TokRet, TokRst, TokHlt:
 			l.doEmit0Operand(frag)
 		case TokAdd, TokSub, TokMul, TokDiv, TokCmp, TokAnd, TokOr, TokXor, TokCpy:
 			l.doEmit2Operand(frag)
@@ -255,6 +255,10 @@ func (l *Linker) doFunction(frag *Statement) {
 	l.defineLabels(frag)
 	l.function = frag
 
+	if len(frag.labels) != 1 {
+		l.errorf(frag, "function must have only one associated label: %v", frag.labels)
+	}
+
 	// compute the fp offset for all params and locals and
 	// add them to the symbol table
 	offset := 0
@@ -281,7 +285,6 @@ func (l *Linker) doFunction(frag *Statement) {
 	opCode := machine.EncodeOp(machine.Sav, machine.ImmediateByte, machine.Implied)
 	l.writeByte(int(opCode))
 	l.writeByte(localSize)
-	// todo: until another global symbol defined, must note we are in a function so rewrite 'ret' as 'rst', error if user has their own 'sav'
 }
 
 func (l *Linker) doEmit2Operand(frag *Statement) {
@@ -469,6 +472,8 @@ func tokToOp(tok TokenType) machine.OpCode {
 		op = machine.Ret
 	case TokRst:
 		op = machine.Rst
+	case TokHlt:
+		op = machine.Hlt
 	case TokSav:
 		op = machine.Sav
 	default:
