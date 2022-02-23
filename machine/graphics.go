@@ -103,6 +103,12 @@ func (c *CmdSDLPollEvents) Exec(d *SDLDevice, addr uint16) uint16 {
 	}
 	d.machine.writeUint16(addr+4, eventType)
 	d.machine.writeUint16(addr+6, timestamp)
+
+	switch t := event.(type) {
+	case *sdl.KeyboardEvent:
+		keyCode := uint16(t.Keysym.Sym)
+		d.machine.writeUint16(addr+8, keyCode)
+	}
 	return ErrNoErr
 }
 
@@ -199,6 +205,7 @@ func (c CmdSDLFillRect) Exec(d *SDLDevice, addr uint16) uint16 {
 	rect.Y = int32(c.Y)
 	rect.W = int32(c.W)
 	rect.H = int32(c.H)
+	//fmt.Printf("fillrect %v\n", rect)
 	err := d.renderer.FillRect(&rect)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error in drawrect: %s\n", err.Error())

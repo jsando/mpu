@@ -113,7 +113,13 @@ Is effectively:
 
 # My todo list
 
+- Ugh ... really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
 - Really need modulus opcode, I have yet to write a program where I haven't had to write 'value - (value / range * range)'
+- Would like a 'pop' to discard top of stack while setting flags, instead of pop #
+- jsr indirect would be nice to do oop-style, ie instances of objects in memory with pointers to their functions
+        - that's not how that works.  you're thinking runtime type info.  Just add a type field.
+        - if i had an object with a pointer to a function, i could write that as a jmp instruction and then jsr to the jmp,
+            while pushing the address of the object so the function knows which 'this' its operating on.
 - Need waaaay better error detection and recovery, right now an invalid symbol will hang forever
 - Is there a way to add unit tests?  That would make writing short programs much more fun and easy to test.
 - Need to cleanup uint16 vs int everywhere, make up your mind
