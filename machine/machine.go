@@ -78,6 +78,22 @@ func (m *Machine) ReadWord(addr int) int {
 	return int(m.memory[addr+1])<<8 + int(m.memory[addr])
 }
 
+func (m *Machine) doSpecialReadWord(addr int) int {
+	if addr == PCAddr {
+		return int(m.pc)
+	}
+	if addr == SPAddr {
+		return int(m.sp)
+	}
+	if addr == FPAddr {
+		return int(m.fp)
+	}
+	if addr == RandAddr {
+		return int(uint16(m.rgen.Intn(65536)))
+	}
+	return 0
+}
+
 // ReadString reads a null-terminated string from memory.
 func (m *Machine) ReadString(addr uint16) string {
 	buf := m.memory[addr:]
@@ -464,20 +480,4 @@ func (m *Machine) formatOperand(mode AddressMode, pc int) (op string, bytes int)
 		panic(fmt.Sprintf("illegal address mode: %d", mode))
 	}
 	return
-}
-
-func (m *Machine) doSpecialReadWord(addr int) int {
-	if addr == PCAddr {
-		return int(m.pc)
-	}
-	if addr == SPAddr {
-		return int(m.sp)
-	}
-	if addr == FPAddr {
-		return int(m.fp)
-	}
-	if addr == RandAddr {
-		return int(uint16(m.rgen.Intn(65536)))
-	}
-	return 0
 }

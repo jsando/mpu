@@ -12,6 +12,7 @@ import (
 
 var inputPath = flag.String("i", "", "Input file")
 var sysmon = flag.Bool("m", false, "Open system monitor")
+var runFlag = flag.Bool("r", false, "assemble and run")
 
 func main() {
 	flag.Parse()
@@ -35,18 +36,23 @@ func main() {
 			linker.Link()
 			linker.PrintMessages()
 			if !linker.HasErrors() {
-				file, err := os.Open(*inputPath)
-				if err != nil {
-					panic(err)
-				}
-				asm.WriteListing(file, os.Stdout, linker)
-				outFileName := file.Name()[:len(file.Name())-2] + ".bin"
-				code := linker.Code()
-				err = ioutil.WriteFile(outFileName, code, 0644)
-				if err != nil {
-					fmt.Printf("error writing object file '%s': %s\n", outFileName, err)
+				if *runFlag {
+					m := machine.NewMachine(linker.Code())
+					m.Run()
 				} else {
-					fmt.Printf("wrote %d bytes to %s\n", len(code), outFileName)
+					file, err := os.Open(*inputPath)
+					if err != nil {
+						panic(err)
+					}
+					asm.WriteListing(file, os.Stdout, linker)
+					outFileName := file.Name()[:len(file.Name())-2] + ".bin"
+					code := linker.Code()
+					err = ioutil.WriteFile(outFileName, code, 0644)
+					if err != nil {
+						fmt.Printf("error writing object file '%s': %s\n", outFileName, err)
+					} else {
+						fmt.Printf("wrote %d bytes to %s\n", len(code), outFileName)
+					}
 				}
 			}
 		}

@@ -113,14 +113,14 @@ Is effectively:
 
 # My todo list
 
+- Really need modulus opcode, I have yet to write a program where I haven't had to write 'value - (value / range * range)'
 - Need waaaay better error detection and recovery, right now an invalid symbol will hang forever
-- Add 'Hlt' as opcode
 - Is there a way to add unit tests?  That would make writing short programs much more fun and easy to test.
-- Some kind of character i/o would be fantastic
 - Need to cleanup uint16 vs int everywhere, make up your mind
 - cleanup
     - lexer
         - encapsulate Scanner completely ... find calls to lexer.s.foo and fix them
+        - text.scanner leaves quotes on strings, ticks on chars, etc
         - would token category help?  directive, opcode, etc
     - parser
         - review all the parse functions and make sure they follow the same pattern ... do they call lexer.next?
@@ -129,7 +129,7 @@ Is effectively:
         - make updating the flags more explicit so I don't accidentally use writeTarget() for updating the sp for example
 - monitor needs a way to view stack contents ... not sure how though unless we know whether they are bytes or words
 - could I actually build a debugger that could inspect variables?
-- a gofmt-equivalent would be nice
+- a gofmt-equivalent would be nice.  I think the lexer would need a facelift, and the parser would need to emit 100% of the file as Statements, so the formatter could then walk that and output it cleanly.
 - Add include directive so I can start building reusable functions
 
 # Input/Output
@@ -155,6 +155,22 @@ params   ds 50
 In this case the params are just structs of whatever each device/command expects.  Ah ... and the results can be DMA'd to the wherever the user wants them.
 
 At this point I think I'll put the IO hook into the first 16 bytes along with my other registers.
+
+Console I/O:
+    write
+    read
+
+## Graphics
+
+Init (open window)
+PollEvents -> event
+SetColor(r, g, b, a)
+DrawLine(x, y, x2, y2)
+DrawRect(x, y, w, h)
+FillRect(x, y, w, h)
+Present
+
+Random uint16 at address 0x0a
 
 # System Monitor
 
