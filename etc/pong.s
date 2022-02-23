@@ -14,8 +14,11 @@ REG_RAND:   dw 0
 
             org 0x10
 // Constants
-SCREEN_WIDTH    = 640
-SCREEN_HEIGHT   = 480
+SCREEN_WIDTH    = 624
+SCREEN_HEIGHT   = 351
+BALL_RADIUS     = 20
+PADDLE_WIDTH    = 20
+PADDLE_HEIGHT   = 80
 SDL_QUIT        = 0x100
 SDL_KEYDOWN     = 0x300
 SDL_KEYUP       = 0x301
@@ -27,13 +30,27 @@ SDLK_ESCAPE     = 0x1b
 
 // Globals
 quit:               dw 0
+
 player1_score:      dw 0
 player1_paddle_x:   dw 26
 player1_paddle_y:   dw SCREEN_HEIGHT / 2
-player1_paddle_w:   dw 20
-player1_paddle_h:   dw 80
+player1_paddle_w:   dw PADDLE_WIDTH
+player1_paddle_h:   dw PADDLE_HEIGHT
 player1_paddle_up:  dw 0
 player1_paddle_dn:  dw 0
+
+player2_score:      dw 0
+player2_paddle_x:   dw SCREEN_WIDTH - 48
+player2_paddle_y:   dw SCREEN_HEIGHT / 2
+player2_paddle_w:   dw PADDLE_WIDTH
+player2_paddle_h:   dw PADDLE_HEIGHT
+player2_paddle_up:  dw 0
+player2_paddle_dn:  dw 0
+
+ball_x:             dw 0
+ball_y:             dw 0
+ball_xspeed:        dw 0
+ball_yspeed:        dw 0
 
 //
 // main is the main entry point.
@@ -41,6 +58,7 @@ player1_paddle_dn:  dw 0
 main():
             // Open the main window
             jsr InitScreen
+            jsr InitBall
 .loop
             jsr PollEvents
             jsr DrawScreen
@@ -71,13 +89,11 @@ PollEvents():
             cpy REG_IO_REQ, #poll
             cmp poll_event, #SDL_QUIT
             jne isKeyDown
-
             cpy quit, #1
             jmp exit
 .isKeyDown
             cmp poll_event, #SDL_KEYDOWN
             jne isKeyUp
-
             psh keycode
             jsr onKeyDown
             pop #2
@@ -85,7 +101,6 @@ PollEvents():
 .isKeyUp
             cmp poll_event, #SDL_KEYUP
             jne isNoMore
-
             psh keycode
             jsr onKeyUp
             pop #2
@@ -102,19 +117,19 @@ PollEvents():
 .keycode
 .poll_data  ds 8                // space for response, structure depends on event type
 
+//
+// Handle keydown events.
+//
 onKeyDown(keycode word):
             cmp keycode, #SDLK_a
             jne checkZ
-
             cpy player1_paddle_up, #1
             jmp done
 .checkZ
             cmp keycode, #SDLK_z
             jne checkEsc
-
             cpy player1_paddle_dn, #1
             jmp done            
-
 .checkEsc  
             cmp keycode, #SDLK_ESCAPE
             jne done
@@ -122,6 +137,9 @@ onKeyDown(keycode word):
 .done            
             ret
 
+//
+// Handle keyup events.
+//
 onKeyUp(keycode word):
             cmp keycode, #SDLK_a
             jne checkZ
@@ -144,7 +162,13 @@ DrawScreen():
             cpy REG_IO_REQ, #color
             cpy REG_IO_REQ, #clear
 
+            cpy REG_IO_REQ, #white
+            cpy REG_IO_REQ, #line
+
             jsr DrawPlayer1Paddle
+            jsr DrawPlayer2Paddle
+            jsr DrawBall
+            jsr Player2AI
 
             // Present what we've drawn and pause 16ms
             cpy REG_IO_REQ, #present
@@ -165,6 +189,13 @@ DrawScreen():
 .present
             dw 2,3              // graphics, present
             dw 16               // delay ms
+.white      dw 2,5
+            db 255,255,255,255
+.line       dw 2,6
+            dw SCREEN_WIDTH / 2
+            dw 0
+            dw SCREEN_WIDTH / 2
+            dw SCREEN_HEIGHT
 
 //
 // Draw player 1 paddle.
@@ -209,3 +240,246 @@ DrawPlayer1Paddle():
 .rect_y     dw 0
 .rect_w     dw 0
 .rect_h     dw 0
+
+//
+// Draw player 2 paddle.
+//
+DrawPlayer2Paddle():
+            // Set draw color to white
+            cpy REG_IO_REQ, #color
+
+            // Draw the paddle as a filled rectange
+            cpy rect_x, player2_paddle_x
+            cpy rect_y, player2_paddle_y
+            cpy rect_w, player2_paddle_w
+            cpy rect_h, player2_paddle_h
+            cpy REG_IO_REQ, #rect
+
+            // Check the up/down flags, move if set (but keep on screen)
+            cmp player2_paddle_up, #0
+            jeq check_down
+            sec
+            sub player2_paddle_y, #2
+            jge move_done
+            cpy player2_paddle_y, #0
+            jmp move_done
+.check_down
+            cmp player2_paddle_dn, #0            
+            jeq move_done
+            clc
+            add player2_paddle_y, #2
+            cmp player2_paddle_y, #SCREEN_HEIGHT - 10
+            jlt move_done
+            cpy player2_paddle_y, #SCREEN_HEIGHT - 10
+.move_done                        
+            ret
+
+            // device request to set color
+.color      dw 2,5
+            db 255,255,255,255
+
+            // device request to fill rectangle
+.rect       dw 2,8
+.rect_x     dw 0
+.rect_y     dw 0
+.rect_w     dw 0
+.rect_h     dw 0
+
+//
+// InitBall
+//
+InitBall():
+    .isLeft local word
+            // Start in center of screen
+            cpy ball_x, #SCREEN_WIDTH / 2
+            cpy ball_y, #SCREEN_HEIGHT / 2
+
+            // Set xspeed to either 3 or 4
+            psh #0
+            psh #2
+            jsr Random
+            pop #2
+            pop ball_xspeed
+            clc
+            add ball_xspeed, #3
+
+            // Half the time, have the ball going left instead of right
+            psh #0
+            psh #100
+            jsr Random
+            pop #2
+            pop isLeft
+            and isLeft, #1
+            jeq setYSpeed
+            mul ball_xspeed, #-1
+.setYSpeed
+            // Set yspeed between -3...3
+            psh #0
+            psh #7
+            jsr Random
+            pop #2
+            pop ball_yspeed
+            sec
+            sub ball_yspeed, #3
+            ret
+
+//
+// Draw ball.
+//
+DrawBall():
+            // Set draw color to white
+            cpy REG_IO_REQ, #color
+
+            // Draw the paddle as a filled rectange
+            cpy rect_x, ball_x
+            cpy rect_y, ball_y
+            cpy rect_w, #BALL_RADIUS
+            cpy rect_h, #BALL_RADIUS
+            cpy REG_IO_REQ, #rect
+
+            // Bounce if hit top or bottom
+            cmp ball_y, #0
+            jlt y_bounce
+            cmp ball_y, #(SCREEN_HEIGHT - BALL_RADIUS)
+            jlt y_no_bounce
+.y_bounce
+            mul ball_yspeed, #-1
+.y_no_bounce
+            // If ball off screen, re-initialize
+            cmp ball_x, #-BALL_RADIUS
+            jlt reset_ball
+            cmp ball_x, #SCREEN_WIDTH
+            jlt no_reset
+.reset_ball
+            jsr InitBall
+.no_reset            
+            // Move ball
+            clc
+            add ball_x, ball_xspeed
+            clc
+            add ball_y, ball_yspeed
+
+            jsr BounceBall      // Bounce ball off player paddles
+
+            ret
+
+            // device request to set color
+.color      dw 2,5
+            db 0,0,255,255
+
+            // device request to fill rectangle
+.rect       dw 2,8
+.rect_x     dw 100
+.rect_y     dw 100
+.rect_w     dw 50
+.rect_h     dw 50
+
+BounceBall():
+            .overlap local word
+
+            // See if the ball is hitting player1 paddle
+            psh #0              // overlap if != 0
+            psh player1_paddle_x
+            psh player1_paddle_y
+            psh player1_paddle_w
+            psh player1_paddle_h
+            psh ball_x
+            psh ball_y
+            psh #BALL_RADIUS
+            psh #BALL_RADIUS
+            jsr Overlap
+            pop #16
+            pop overlap
+            jeq check_player2
+            mul ball_xspeed, #-1
+            jmp done
+.check_player2
+            psh #0              // overlap if != 0
+            psh player2_paddle_x
+            psh player2_paddle_y
+            psh player2_paddle_w
+            psh player2_paddle_h
+            psh ball_x
+            psh ball_y
+            psh #BALL_RADIUS
+            psh #BALL_RADIUS
+            jsr Overlap
+            pop #16
+            pop overlap
+            jeq done
+            mul ball_xspeed, #-1
+.done
+            ret
+
+//
+// Player 2 is automatic.
+//
+Player2AI():
+    .middle local word
+            cpy middle, player2_paddle_y
+            clc
+            add middle, #(PADDLE_HEIGHT / 2)
+            cmp ball_y, middle
+            jlt move_up
+            jeq no_move
+.move_dn
+            cpy player2_paddle_dn, #1
+            cpy player2_paddle_up, #0
+            ret
+.move_up
+            cpy player2_paddle_dn, #0
+            cpy player2_paddle_up, #1
+            ret
+.no_move       
+            cpy player2_paddle_dn, #0
+            cpy player2_paddle_up, #0
+            ret
+
+//
+// Determine if two rectanges are overlapping.
+//
+Overlap(overlap word, x1 word, y1 word, w1 word, h1 word, x2 word, y2 word, w2 word, h2 word):
+            .right1     local word
+            .bottom1    local word
+            .right2     local word
+            .bottom2    local word
+
+            cpy overlap, #0     // default to no overlap
+            clc                 // compute bottom/right edges
+            cpy right1, x1
+            add right1, w1
+            clc
+            cpy bottom1, y1
+            add bottom1, h1
+            clc
+            cpy right2, x2
+            add right2, w2
+            clc
+            cpy bottom2, y2
+            add bottom2, h2
+
+            cmp y1, bottom2     // r1 completely below r2?
+            jge done
+            cmp bottom1, y2     // r1 completely above r2?
+            jlt done
+            cmp x1, right2      // r1 to right of r2?
+            jge done
+            cmp right1, x2      // r1 tot left of r2?
+            jlt done
+            cpy overlap, #1     // If its not all of the above, its overlapping
+.done
+            ret
+
+// Generate a random number in the range (0, range]
+//
+Random(result word, range word):
+    .i local word
+    .j local word
+            cpy i, 10           // get a random number in range 0-65535
+            cpy j, i            // value / range * range
+            div j, range
+            mul j, range
+            cpy result, i
+            sec
+            sub result, j
+            ret

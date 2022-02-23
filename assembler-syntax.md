@@ -114,6 +114,7 @@ Is effectively:
 # My todo list
 
 - Ugh ... really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
+    - Suppose I could add a 1 byte (uint8) to relative-indirect, if none specified its zero?  My lovely byte savings go away :(
 - Really need modulus opcode, I have yet to write a program where I haven't had to write 'value - (value / range * range)'
 - Would like a 'pop' to discard top of stack while setting flags, instead of pop #
 - jsr indirect would be nice to do oop-style, ie instances of objects in memory with pointers to their functions

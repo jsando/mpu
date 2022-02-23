@@ -48,6 +48,7 @@ main():
     dw 2
 .io_poll_time
     dw 2
+    ds 8 // space for event data
 
 .io_present_req
     dw 2

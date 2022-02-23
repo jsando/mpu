@@ -61,7 +61,7 @@ type CmdSDLInit struct {
 
 func (c *CmdSDLInit) Exec(d *SDLDevice, addr uint16) uint16 {
 	winTitle := d.machine.ReadString(c.Title)
-	fmt.Printf("execInit: %v, title: '%s'\n", c, winTitle)
+	//fmt.Printf("execInit: %v, title: '%s'\n", c, winTitle)
 	window, err := sdl.CreateWindow(winTitle, sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED,
 		int32(c.Width), int32(c.Height), sdl.WINDOW_SHOWN)
 	if err != nil {
@@ -99,7 +99,7 @@ func (c *CmdSDLPollEvents) Exec(d *SDLDevice, addr uint16) uint16 {
 		}
 		eventType = uint16(event.GetType())
 		timestamp = uint16(event.GetTimestamp() / 250)
-		fmt.Printf("sdl poll events (event=%d, time=%d)\n", eventType, timestamp)
+		//fmt.Printf("sdl poll events (event=%d, time=%d)\n", eventType, timestamp)
 	}
 	d.machine.writeUint16(addr+4, eventType)
 	d.machine.writeUint16(addr+6, timestamp)
