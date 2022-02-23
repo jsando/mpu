@@ -75,10 +75,6 @@ func TestReadByte(t *testing.T) {
 	if val != -7 {
 		t.Errorf("expected: -7, got: %d", val)
 	}
-	addr := offset(1000, -10)
-	if addr != 990 {
-		t.Errorf("expected: 990, got: %d", addr)
-	}
 }
 
 //func TestFetchOperands(t *testing.T) {
