@@ -3,15 +3,18 @@ package machine
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
+	"time"
 )
 
 const (
-	PCAddr = 0 // Program counter
-	SPAddr = 2 // Stack pointer, points to last byte written
-	FPAddr = 4 // Frame pointer
-	IOReq  = 6 // Address of I/O commands are written here to execute
-	IORes  = 8 // I/O status of last command, 0 = success, != 0 error
+	PCAddr   = 0  // Program counter
+	SPAddr   = 2  // Stack pointer, points to last byte written
+	FPAddr   = 4  // Frame pointer
+	IOReq    = 6  // Address of I/O commands are written here to execute
+	IORes    = 8  // I/O status of last command, 0 = success, != 0 error
+	RandAddr = 10 // Writes are ignored, reads return random uint8/uint16
 )
 
 // Machine implements MPU ... memory processing unit.
@@ -21,11 +24,12 @@ type Machine struct {
 	pc       uint16 // program counter ... shadowed on read/write to address $0
 	sp       uint16 // stack pointer ... shadowed on read/write to address $2
 	fp       uint16 // frame pointer ... shadowed on read/write to address $4
-	negative bool   // Negative flag, set true if last value had the high bit set.
-	zero     bool   // Zero flag, set true if last value had zero value.
-	carry    bool   // Carry flag
-	bytes    bool   // Bytes flag, if true then operations are on bytes instead of words
-	step     bool   // Single step mode, if true breaks after executing 1 instruction
+	rgen     *rand.Rand
+	negative bool // Negative flag, set true if last value had the high bit set.
+	zero     bool // Zero flag, set true if last value had zero value.
+	carry    bool // Carry flag
+	bytes    bool // Bytes flag, if true then operations are on bytes instead of words
+	step     bool // Single step mode, if true breaks after executing 1 instruction
 	devices  []IODevice
 }
 
@@ -38,6 +42,7 @@ func NewMachine(image []byte) *Machine {
 		memory:  make([]byte, 65536),
 		pc:      0x100,
 		sp:      0xffff,
+		rgen:    rand.New(rand.NewSource(time.Now().UnixNano())),
 		devices: make([]IODevice, 256),
 	}
 	copy(m.memory, image)
@@ -45,6 +50,7 @@ func NewMachine(image []byte) *Machine {
 	m.sp = m.readUint16(SPAddr)
 	m.fp = m.readUint16(FPAddr)
 	m.RegisterDevice(&StdoutDevice{}, 1)
+	m.RegisterDevice(NewSDLDevice(m), 2)
 	return m
 }
 
@@ -66,16 +72,23 @@ func (m *Machine) ReadInt8(addr int) int {
 }
 
 func (m *Machine) ReadWord(addr int) int {
-	if addr == PCAddr {
-		return int(m.pc)
-	}
-	if addr == SPAddr {
-		return int(m.sp)
-	}
-	if addr == FPAddr {
-		return int(m.fp)
+	if addr < 16 {
+		return m.doSpecialReadWord(addr)
 	}
 	return int(m.memory[addr+1])<<8 + int(m.memory[addr])
+}
+
+// ReadString reads a null-terminated string from memory.
+func (m *Machine) ReadString(addr uint16) string {
+	buf := m.memory[addr:]
+	i := 0
+	for _, b := range buf {
+		if b == 0 {
+			break
+		}
+		i++
+	}
+	return string(buf[:i])
 }
 
 func (m *Machine) WriteWord(addr, value int) {
@@ -451,4 +464,20 @@ func (m *Machine) formatOperand(mode AddressMode, pc int) (op string, bytes int)
 		panic(fmt.Sprintf("illegal address mode: %d", mode))
 	}
 	return
+}
+
+func (m *Machine) doSpecialReadWord(addr int) int {
+	if addr == PCAddr {
+		return int(m.pc)
+	}
+	if addr == SPAddr {
+		return int(m.sp)
+	}
+	if addr == FPAddr {
+		return int(m.fp)
+	}
+	if addr == RandAddr {
+		return int(uint16(m.rgen.Intn(65536)))
+	}
+	return 0
 }
