@@ -539,227 +539,46 @@ DrawCharacter(char word):
             .mask local word
             .test local word
             .lcd local word
+            .segptr local word
 
             // Set drawcolor to white
             cpy REG_IO_REQ, #white
 
-            // int dra = lcd[digit]
+            // Lookup which segments to draw for the requested character
             cpy lcd, char
             mul lcd, #2
-            add lcd, #font
+            add lcd, #CharacterTable
             cpy mask, *lcd
+            cpy segptr, #CharacterSegmentTable
+.loop
+            cpy test, #1
+            and test, mask
+            jne draw
+            add segptr, #8
+            jmp next
+.draw
+            cpy line_x, tx
+            add line_x, *segptr
+            add segptr, #2
 
-            // if mask and 1 then Display.DrawLine (tx+1,ty+0,tx+2,ty+0)
-            cpy test, mask
-            and test, #1
-            jeq s2
-            cpy line_x, tx
-            add line_x, #1
             cpy line_y, ty
+            add line_y, *segptr
+            add segptr, #2
+
             cpy line_x2, tx
-            add line_x2, #2
+            add line_x2, *segptr
+            add segptr, #2
+
             cpy line_y2, ty
+            add line_y2, *segptr
+            add segptr, #2
             cpy REG_IO_REQ, #line
-.s2
-            // if mask and 2 then Display.DrawLine (tx+0,ty+1,tx+0,ty+2)
-            cpy test, mask
-            and test, #2
-            jeq s3
-            cpy line_x, tx
-            add line_x, #0
-            cpy line_y, ty
-            add line_y, #1
-            cpy line_x2, tx
-            add line_x2, #0
-            cpy line_y2, ty
-            add line_y2, #2
-            cpy REG_IO_REQ, #line
-.s3
-            // if mask and 4 then Display.DrawLine (tx+3,ty+1,tx+3,ty+2)
-            cpy test, mask
-            and test, #4
-            jeq s4
-            cpy line_x, tx
-            add line_x, #3
-            cpy line_y, ty
-            add line_y, #1
-            cpy line_x2, tx
-            add line_x2, #3
-            cpy line_y2, ty
-            add line_y2, #2
-            cpy REG_IO_REQ, #line
-.s4
-            // if mask and 8 then Display.DrawLine (tx+1,ty+3,tx+2,ty+3)
-            cpy test, mask
-            and test, #8
-            jeq s5
-            cpy line_x, tx
-            add line_x, #1
-            cpy line_y, ty
-            add line_y, #3
-            cpy line_x2, tx
-            add line_x2, #2
-            cpy line_y2, ty
-            add line_y2, #3
-            cpy REG_IO_REQ, #line
-.s5
-            // if mask and 16 then Display.DrawLine (tx+0,ty+4,tx+0,ty+5)
-            cpy test, mask
-            and test, #16
-            jeq s6
-            cpy line_x, tx
-            add line_x, #0
-            cpy line_y, ty
-            add line_y, #4
-            cpy line_x2, tx
-            add line_x2, #0
-            cpy line_y2, ty
-            add line_y2, #5
-            cpy REG_IO_REQ, #line
-.s6
-            // if mask and 32 then Display.DrawLine (tx+3,ty+4,tx+3,ty+5)
-            cpy test, mask
-            and test, #32
-            jeq s7
-            cpy line_x, tx
-            add line_x, #3
-            cpy line_y, ty
-            add line_y, #4
-            cpy line_x2, tx
-            add line_x2, #3
-            cpy line_y2, ty
-            add line_y2, #5
-            cpy REG_IO_REQ, #line
-.s7
-            // if mask and 64 then Display.DrawLine (tx+1,ty+6,tx+2,ty+6)
-            cpy test, mask
-            and test, #64
-            jeq s8
-            cpy line_x, tx
-            add line_x, #1
-            cpy line_y, ty
-            add line_y, #6
-            cpy line_x2, tx
-            add line_x2, #2
-            cpy line_y2, ty
-            add line_y2, #6
-            cpy REG_IO_REQ, #line
-.s8
-            // if mask and 128 then Display.DrawLine (tx+1,ty+2,tx+2,ty+1)
-            cpy test, mask
-            and test, #128
-            jeq s9
-            cpy line_x, tx
-            add line_x, #1
-            cpy line_y, ty
-            add line_y, #2
-            cpy line_x2, tx
-            add line_x2, #2
-            cpy line_y2, ty
-            add line_y2, #1
-            cpy REG_IO_REQ, #line
-.s9
-            // if mask and 256 then Display.DrawLine (tx+1,ty+4,tx+2,ty+5)
-            cpy test, mask
-            and test, #256
-            jeq s10
-            cpy line_x, tx
-            add line_x, #1
-            cpy line_y, ty
-            add line_y, #4
-            cpy line_x2, tx
-            add line_x2, #2
-            cpy line_y2, ty
-            add line_y2, #5
-            cpy REG_IO_REQ, #line
-.s10
-            // if mask and 512 then Display.DrawLine (tx+0,ty+1,tx+1,ty+2)
-            cpy test, mask
-            and test, #512
-            jeq s11
-            cpy line_x, tx
-            add line_x, #0
-            cpy line_y, ty
-            add line_y, #1
-            cpy line_x2, tx
-            add line_x2, #1
-            cpy line_y2, ty
-            add line_y2, #2
-            cpy REG_IO_REQ, #line
-.s11
-            // if mask and 1024 then Display.DrawLine (tx+1,ty+1,tx+1,ty+3)
-            cpy test, mask
-            and test, #1024
-            jeq s12
-            cpy line_x, tx
-            add line_x, #1
-            cpy line_y, ty
-            add line_y, #1
-            cpy line_x2, tx
-            add line_x2, #1
-            cpy line_y2, ty
-            add line_y2, #3
-            cpy REG_IO_REQ, #line
-.s12
-            // if mask and 2048 then Display.DrawLine (tx+2,ty+2,tx+3,ty+1)
-            cpy test, mask
-            and test, #2048
-            jeq s13
-            cpy line_x, tx
-            add line_x, #2
-            cpy line_y, ty
-            add line_y, #2
-            cpy line_x2, tx
-            add line_x2, #3
-            cpy line_y2, ty
-            add line_y2, #1
-            cpy REG_IO_REQ, #line
-.s13
-            // if mask and 4096 then Display.DrawLine (tx+0,ty+5,tx+1,ty+4)
-            cpy test, mask
-            and test, #2
-            jeq s14
-            cpy line_x, tx
-            add line_x, #0
-            cpy line_y, ty
-            add line_y, #5
-            cpy line_x2, tx
-            add line_x2, #1
-            cpy line_y2, ty
-            add line_y2, #4
-            cpy REG_IO_REQ, #line
-.s14
-            // if mask and 8192 then Display.DrawLine (tx+1,ty+3,tx+1,ty+5)
-            cpy test, mask
-            and test, #8192
-            jeq s15
-            cpy line_x, tx
-            add line_x, #1
-            cpy line_y, ty
-            add line_y, #3
-            cpy line_x2, tx
-            add line_x2, #1
-            cpy line_y2, ty
-            add line_y2, #5
-            cpy REG_IO_REQ, #line
-.s15
-            // if mask and 16384 then Display.DrawLine (tx+2,ty+4,tx+3,ty+5)
-            cpy test, mask
-            and test, #16384
-            jeq s16
-            cpy line_x, tx
-            add line_x, #2
-            cpy line_y, ty
-            add line_y, #4
-            cpy line_x2, tx
-            add line_x2, #3
-            cpy line_y2, ty
-            add line_y2, #5
-            cpy REG_IO_REQ, #line
-.s16
-            // tx = tx + 5
-            add tx, #5
-        ret
+.next
+            div mask, #2        // shift right
+            jne loop            // if result is zero there's nothing more to draw
+
+            add tx, #CHARACTER_WIDTH
+            ret
 
 .white      dw 2,5
             db 255,255,255,255
@@ -797,8 +616,9 @@ DrawCharacter(char word):
 // 4096 = j
 // 8192 = o
 // 16384 = k
+CHARACTER_WIDTH     =   5
 
-font:
+CharacterTable:
     dw 1+2+4+16+32+64           // 0
     dw 4+32                     // 1
     dw 1+4+8+16+64              // 2
@@ -835,3 +655,20 @@ font:
     dw 512+16384+2048+4096      // X
     dw 512+2048+8192            // Y
     dw 1+2048+4096+64           // Z
+
+CharacterSegmentTable:
+    dw 1,0,2,0
+    dw 0,1,0,2
+    dw 3,1,3,2
+    dw 1,3,2,3
+    dw 0,4,0,5
+    dw 3,4,3,5
+    dw 1,6,2,6
+    dw 1,2,2,1
+    dw 1,4,2,5
+    dw 0,1,1,2
+    dw 1,1,1,3
+    dw 2,2,3,1
+    dw 0,5,1,4
+    dw 1,3,1,5
+    dw 2,4,3,5
