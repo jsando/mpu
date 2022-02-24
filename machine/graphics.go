@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/veandco/go-sdl2/gfx"
 	"github.com/veandco/go-sdl2/sdl"
 	"os"
 )
@@ -157,6 +158,7 @@ func (c CmdSDLDrawLine) Exec(d *SDLDevice, addr uint16) uint16 {
 		fmt.Printf("error in drawline, sdl not initialized\n")
 		return ErrIOError
 	}
+	//fmt.Printf("drawline: %v\n", c)
 	err := d.renderer.DrawLine(int32(c.X1), int32(c.Y1), int32(c.X2), int32(c.Y2))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error in drawline: %s\n", err.Error())
@@ -225,6 +227,8 @@ func (c *CmdSDLPresent) Exec(d *SDLDevice, addr uint16) uint16 {
 		fmt.Fprintf(os.Stderr, "SDL error, not initialized\n")
 		return ErrIOError
 	}
+	gfx.StringColor(d.renderer, 16, 16, "GFX Demo", sdl.Color{0, 255, 0, 255})
+
 	d.renderer.Present()
 	if c.DelayMS > 0 {
 		sdl.Delay(uint32(c.DelayMS))

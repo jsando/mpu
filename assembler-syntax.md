@@ -115,8 +115,9 @@ Is effectively:
 
 - Ugh ... really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
     - Suppose I could add a 1 byte (uint8) to relative-indirect, if none specified its zero?  My lovely byte savings go away :(
+    - I haven't used relative-indirect very much
 - Really need modulus opcode, I have yet to write a program where I haven't had to write 'value - (value / range * range)'
-- Would like a 'pop' to discard top of stack while setting flags, instead of pop #
+- Would like a 'pop' to discard top of stack while setting flags, instead of pop #.  Can use some common address too, ie pop DISCARD
 - jsr indirect would be nice to do oop-style, ie instances of objects in memory with pointers to their functions
         - that's not how that works.  you're thinking runtime type info.  Just add a type field.
         - if i had an object with a pointer to a function, i could write that as a jmp instruction and then jsr to the jmp,
