@@ -48,7 +48,7 @@ And the same in MPU, using fp relative-indirect mode.
 
     cpy fp+2, #$2000
     clc
-    adc *fp+2, #50
+    adc [fp+2], #50
 
 The two relative modes using the frame pointer as a base.  The frame pointer can be directly manipulated by reading/writing to address 4, but better is to use the sav/rst opcodes.  The assembler also has a fp-automatic syntax that automates all of that.
 
@@ -113,16 +113,13 @@ Is effectively:
 
 # My todo list
 
+- Generalize device handling so devices register handlers instead of device/handler (and make deviceid/cmd into a single word, add a command size field for validation)
+- Profile performance
+- Add include directive so I can start building reusable functions
 - Ugh ... really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
     - Suppose I could add a 1 byte (uint8) to relative-indirect, if none specified its zero?  My lovely byte savings go away :(
-    - I haven't used relative-indirect very much
-- Really need modulus opcode, I have yet to write a program where I haven't had to write 'value - (value / range * range)'
-- Would like a 'pop' to discard top of stack while setting flags, instead of pop #.  Can use some common address too, ie pop DISCARD
-- jsr indirect would be nice to do oop-style, ie instances of objects in memory with pointers to their functions
-        - that's not how that works.  you're thinking runtime type info.  Just add a type field.
-        - if i had an object with a pointer to a function, i could write that as a jmp instruction and then jsr to the jmp,
-            while pushing the address of the object so the function knows which 'this' its operating on.
-- Need waaaay better error detection and recovery, right now an invalid symbol will hang forever
+    - Tried it on some sample code and it cleans it up a lot
+- a gofmt-equivalent would be nice.  I think the lexer would need a facelift, and the parser would need to emit 100% of the file as Statements, so the formatter could then walk that and output it cleanly.
 - Is there a way to add unit tests?  That would make writing short programs much more fun and easy to test.
 - Need to cleanup uint16 vs int everywhere, make up your mind
 - cleanup
@@ -130,6 +127,7 @@ Is effectively:
         - encapsulate Scanner completely ... find calls to lexer.s.foo and fix them
         - text.scanner leaves quotes on strings, ticks on chars, etc
         - would token category help?  directive, opcode, etc
+        - don't use text.Scanner ... just use my own.  Use $ instead of 0x, ; instead of //.
     - parser
         - review all the parse functions and make sure they follow the same pattern ... do they call lexer.next?
         - sometimes I use tok := lexer.next and sometimes lexer.tok
@@ -137,8 +135,6 @@ Is effectively:
         - make updating the flags more explicit so I don't accidentally use writeTarget() for updating the sp for example
 - monitor needs a way to view stack contents ... not sure how though unless we know whether they are bytes or words
 - could I actually build a debugger that could inspect variables?
-- a gofmt-equivalent would be nice.  I think the lexer would need a facelift, and the parser would need to emit 100% of the file as Statements, so the formatter could then walk that and output it cleanly.
-- Add include directive so I can start building reusable functions
 
 # Input/Output
 
@@ -167,6 +163,8 @@ At this point I think I'll put the IO hook into the first 16 bytes along with my
 Console I/O:
     write
     read
+
+I was able to use encoding/binary to decode handler structs from mpu to Go.  I can generalize that, and make deviceId/Command into bytes in a single word.  Have devices register handlers and don't register devices at all.  Prob just use a map of handler in machine.
 
 ## Graphics
 
