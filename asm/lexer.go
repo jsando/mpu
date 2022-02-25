@@ -116,6 +116,18 @@ func NewLexer(name string, r io.Reader) *Lexer {
 	}
 }
 
+func (l *Lexer) FileName() string {
+	return l.s.Filename
+}
+
+func (l *Lexer) Line() int {
+	return l.s.Line
+}
+
+func (l *Lexer) Column() int {
+	return l.s.Column
+}
+
 func (l *Lexer) Next() TokenType {
 	s := l.s
 	var scanToken rune
@@ -199,6 +211,10 @@ func (l *Lexer) skipToEOL() {
 	for l.tok != TokEOL && l.tok != TokEOF {
 		l.Next()
 	}
+}
+
+func (l *Lexer) TokenText() string {
+	return l.s.TokenText()
 }
 
 func toKeyword(ident string) TokenType {

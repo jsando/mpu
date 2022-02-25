@@ -46,7 +46,7 @@ InitScreen():
             cpy REG_IO_REQ, #init
             ret
 
-.init       dw 2,1              // graphics, initialize
+.init       dw 0x0201              // graphics, initialize
             dw SCREEN_WIDTH
             dw SCREEN_HEIGHT
             dw title
@@ -82,7 +82,7 @@ PollEvents():
 .exit            
             ret
 
-.poll       dw 2,2              // graphics, poll        
+.poll       dw 0x0202           // graphics, poll        
 .poll_event dw 0                // space for response event type id
 .poll_time  dw 0                // space for response event timestamp (1/4 second since init)
 .keycode
@@ -133,23 +133,21 @@ DrawScreen():
             ret
 
             // device request to set color
-.color      dw 2,5
+.color      dw 0x0205
 .color_r    db 0
 .color_g    db 0
 .color_b    db 0
 .color_a    db 255
 
             // device request to clear screen
-.clear
-            dw 2,4              // graphics, clear
+.clear      dw 0x0204              
 
             // device request to present backbuffer to screen
-.present
-            dw 2,3              // graphics, present
+.present    dw 0x0203              
             dw 10               // delay ms
-.white      dw 2,5
+.white      dw 0x0205
             db 255,0,0,255
-.line       dw 2,6
+.line       dw 0x0206
             dw SCREEN_WIDTH / 2
             dw 0
             dw SCREEN_WIDTH / 2
@@ -240,7 +238,7 @@ DrawCharacter(char word):
             add tx, #CHAR_SPACE
             ret
 
-.line       dw 2,6
+.line       dw 0x0206
 .line_x     dw 0
 .line_y     dw 0
 .line_x2    dw 0
@@ -281,11 +279,11 @@ Order of bits within CharacterTable are as follows (A is bit 0):
 
 */
 
-CHAR_SPACE  = 17
-LINE_SPACE  = 32
+CHAR_SPACE  = 36
+LINE_SPACE  = 70
 
 CharacterSegmentTable:
-    .cw          = 14
+    .cw          = 32
     .x1          = 0
     .x2          = cw / 2
     .x3          = cw - 1

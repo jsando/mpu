@@ -37,7 +37,7 @@ loop:
 		case TokDot:
 			p.parseLocalLabel()
 		case TokIdent:
-			text := lexer.s.TokenText()
+			text := lexer.TokenText()
 			tok = toKeyword(text)
 			if tok == TokIdent {
 				p.parseLabel()
@@ -55,7 +55,7 @@ loop:
 }
 
 func (p *Parser) parseLabel() {
-	text := p.lexer.s.TokenText()
+	text := p.lexer.TokenText()
 	tok := p.lexer.Next()
 	if tok == TokEquals {
 		p.lexer.Next()
@@ -82,7 +82,7 @@ func (p *Parser) parseFunctionDecl(fnName string) {
 			p.lexer.skipToEOL()
 			return
 		}
-		id := fnName + "." + p.lexer.s.TokenText()
+		id := fnName + "." + p.lexer.TokenText()
 		tok := p.lexer.Next()
 		if tok != TokIdent {
 			p.errorf("expected: identifier, got: %s", p.lexer.tok)
@@ -90,7 +90,7 @@ func (p *Parser) parseFunctionDecl(fnName string) {
 			return
 		}
 		var size int
-		sizeText := p.lexer.s.TokenText()
+		sizeText := p.lexer.TokenText()
 		if sizeText == "word" {
 			size = 2
 		} else if sizeText == "byte" {
@@ -110,7 +110,7 @@ func (p *Parser) parseFunctionDecl(fnName string) {
 	}
 	tok := p.lexer.Next()
 	if tok != TokColon {
-		p.errorf("expected ':', got: %s", p.lexer.s.TokenText())
+		p.errorf("expected ':', got: %s", p.lexer.TokenText())
 	}
 	p.lexer.Next()
 }
@@ -122,7 +122,7 @@ func (p *Parser) parseLocalLabel() {
 		p.lexer.skipToEOL()
 		return
 	}
-	tokenText := p.lexer.s.TokenText()
+	tokenText := p.lexer.TokenText()
 	p.lexer.Next()
 
 	// If followed by '=', its a local equate
@@ -131,7 +131,7 @@ func (p *Parser) parseLocalLabel() {
 		fragment := p.newEquate(p.label + "." + tokenText)
 		operands := p.parseOperands()
 		fragment.operands = operands
-	} else if p.lexer.tok == TokIdent && p.lexer.s.TokenText() == "local" {
+	} else if p.lexer.tok == TokIdent && p.lexer.TokenText() == "local" {
 		// if followed by 'local' it's a local decl ie fp relative
 		if p.last.operation != TokFunction {
 			p.errorf("'local' can only be used immediately after function declaration")
@@ -145,7 +145,7 @@ func (p *Parser) parseLocalLabel() {
 		}
 		id := p.label + "." + tokenText
 		var size int
-		sizeText := p.lexer.s.TokenText()
+		sizeText := p.lexer.TokenText()
 		if sizeText == "word" {
 			size = 2
 		} else if sizeText == "byte" {
@@ -168,7 +168,7 @@ func (p *Parser) parseLocalLabel() {
 // into the linked list.
 func (p *Parser) newFragment(operation TokenType) *Statement {
 	fragment := &Statement{
-		file:      p.lexer.s.Filename,
+		file:      p.lexer.FileName(),
 		line:      p.lexer.line,
 		labels:    p.pendingLabels,
 		operation: operation,
@@ -188,7 +188,7 @@ func (p *Parser) newFragment(operation TokenType) *Statement {
 // into the linked list.
 func (p *Parser) newEquate(id string) *Statement {
 	fragment := &Statement{
-		file:      p.lexer.s.Filename,
+		file:      p.lexer.FileName(),
 		line:      p.lexer.line,
 		labels:    []string{id},
 		operation: TokEquals,
@@ -215,28 +215,19 @@ func (p *Parser) defineLocalLabel(text string) {
 	p.pendingLabels = append(p.pendingLabels, p.label+"."+text)
 }
 
-func (p *Parser) defineLocalFpLabel(text string) {
-	if len(p.label) == 0 {
-		p.errorf("can't define local '%s', no global in scope", text)
-	}
-	//localName := p.label+"."+text
-	//p.pendingFpLabels = append(p.pendingFpLabels, localName)
-	panic("todo")
-}
-
 func (p *Parser) errorf(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	p.messages.Error(p.lexer.s.Filename, p.lexer.s.Line, p.lexer.s.Column, s)
+	p.messages.Error(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
 }
 
 func (p *Parser) warnf(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	p.messages.Warn(p.lexer.s.Filename, p.lexer.s.Line, p.lexer.s.Column, s)
+	p.messages.Warn(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
 }
 
 func (p *Parser) infof(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	p.messages.Info(p.lexer.s.Filename, p.lexer.s.Line, p.lexer.s.Column, s)
+	p.messages.Info(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
 }
 
 func (p *Parser) parseOperands() []*Operand {
@@ -263,12 +254,11 @@ func (p *Parser) parseOperand() *Operand {
 	mode := machine.Absolute
 	match := TokNone
 	if tok == TokStar {
-		if p.lexer.s.Peek() == '[' {
-			p.lexer.Next()
-			p.expect(TokLeftBracket)
-			p.lexer.Next() // consumer 'sp'
+		tok = p.lexer.Next()
+		if tok == TokLeftBracket {
+			p.lexer.Next() // consumer 'fp'
 			p.expect(TokIdent)
-			text := p.lexer.s.TokenText()
+			text := p.lexer.TokenText()
 			if text != "fp" {
 				p.errorf("expected 'fp', got %s", text)
 			}
@@ -280,7 +270,6 @@ func (p *Parser) parseOperand() *Operand {
 			mode = machine.RelativeIndirect
 		} else {
 			mode = machine.Indirect
-			p.lexer.Next()
 		}
 	} else if tok == TokHash {
 		mode = machine.Immediate
@@ -290,7 +279,7 @@ func (p *Parser) parseOperand() *Operand {
 		mode = machine.Relative
 		p.lexer.Next()
 		p.expect(TokIdent)
-		text := p.lexer.s.TokenText()
+		text := p.lexer.TokenText()
 		if text != "fp" {
 			p.errorf("expected 'fp', got %s", text)
 		}
@@ -373,12 +362,15 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		p.expect(TokRightParen)
 		p.lexer.Next()
 	case TokIdent:
-		expr = ExprIdent{ident: p.lexer.s.TokenText(), activeLabel: p.label}
+		expr = ExprIdent{ident: p.lexer.TokenText(), activeLabel: p.label}
 	case TokString:
-		bytes := []byte(p.lexer.s.TokenText())
-		expr = BytesLiteral{value: bytes[1 : len(bytes)-1]}
+		s, err := strconv.Unquote(p.lexer.TokenText())
+		if err != nil {
+			p.errorf("invalid string literal")
+		}
+		expr = BytesLiteral{value: []byte(s)}
 	case TokInt:
-		text := p.lexer.s.TokenText()
+		text := p.lexer.TokenText()
 		var val int64
 		var err error
 		if strings.HasPrefix(text, "0x") {
@@ -397,7 +389,7 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		}
 		expr = IntLiteral{value: int(val)}
 	case TokChar:
-		expr = IntLiteral{value: int(p.lexer.s.TokenText()[1])}
+		expr = IntLiteral{value: int(p.lexer.TokenText()[1])}
 	default:
 		// some kind of error
 		p.errorf("expected (expr), identifier, or literal (got %s)", p.lexer.tok)
@@ -410,7 +402,7 @@ func (p *Parser) parsePrimaryExpr() Expr {
 
 func (p *Parser) expect(tokenType TokenType) {
 	if p.lexer.tok != tokenType {
-		p.errorf("expected: %s, got: %s", tokenType, p.lexer.s.TokenText())
+		p.errorf("expected: %s, got: %s", tokenType, p.lexer.TokenText())
 	}
 }
 

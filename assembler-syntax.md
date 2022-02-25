@@ -113,7 +113,6 @@ Is effectively:
 
 # My todo list
 
-- Generalize device handling so devices register handlers instead of device/handler (and make deviceid/cmd into a single word, add a command size field for validation)
 - Profile performance
 - Add include directive so I can start building reusable functions
 - Ugh ... really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
