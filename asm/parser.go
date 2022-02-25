@@ -47,6 +47,9 @@ loop:
 				operands := p.parseOperands()
 				fragment.operands = operands
 			}
+		default:
+			p.errorf("unexpected: %s", p.lexer.tok)
+			break loop
 		}
 	}
 }

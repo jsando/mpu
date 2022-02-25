@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/veandco/go-sdl2/gfx"
 	"github.com/veandco/go-sdl2/sdl"
 	"os"
 )
@@ -227,7 +226,7 @@ func (c *CmdSDLPresent) Exec(d *SDLDevice, addr uint16) uint16 {
 		fmt.Fprintf(os.Stderr, "SDL error, not initialized\n")
 		return ErrIOError
 	}
-	gfx.StringColor(d.renderer, 16, 16, "GFX Demo", sdl.Color{0, 255, 0, 255})
+	//gfx.StringColor(d.renderer, 16, 16, "GFX Demo", sdl.Color{0, 255, 0, 255})
 
 	d.renderer.Present()
 	if c.DelayMS > 0 {

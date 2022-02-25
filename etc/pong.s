@@ -204,7 +204,7 @@ DrawScreen():
             dw SCREEN_WIDTH / 2
             dw SCREEN_HEIGHT
 
-.game_over  db "GAME OVER AND LOOK AT THIS FRIGGIN TEXT 0 1 2 3 4 5 6 7 8 9",0
+.game_over  db "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",0
 
 //
 // Draw player 1 paddle.
@@ -577,7 +577,7 @@ DrawCharacter(char word):
             div mask, #2        // shift right
             jne loop            // if result is zero there's nothing more to draw
 
-            add tx, #CHARACTER_WIDTH
+            add tx, #CHAR_SPACE
             ret
 
 .white      dw 2,5
@@ -588,7 +588,7 @@ DrawCharacter(char word):
 .line_x2    dw 0
 .line_y2    dw 0
 
-// A 7-segment lcd font.
+// A 16-segment lcd font.  Its a 14-segment display with 2 custom segments for K and R.
 //
 //    aaaaaaaa     h   n    i          l                  
 //   b        c     h  n   i         l                    
@@ -616,7 +616,33 @@ DrawCharacter(char word):
 // 4096 = j
 // 8192 = o
 // 16384 = k
-CHARACTER_WIDTH     =   5
+
+CHAR_SPACE  = 14
+CWIDTH      = 12
+CLEFT       = 0
+CRIGHT      = CWIDTH - 1
+CTOP        = 0
+CBOTTOM     = 2 * CWIDTH - 1
+CMIDY       = CWIDTH
+CMIDX       = CWIDTH / 2
+
+CharacterSegmentTable:
+    dw CLEFT+1,CTOP,CRIGHT-1,CTOP
+    dw CLEFT,CTOP+1,CLEFT,CMIDY-1
+    dw CRIGHT,CTOP+1,CRIGHT,CMIDY-1
+    dw CLEFT+1,CMIDY,CRIGHT-1,CMIDY
+    dw CLEFT,CMIDY+1,CLEFT,CBOTTOM-1
+    dw CRIGHT,CMIDY+1,CRIGHT,CBOTTOM-1
+    dw CLEFT+1,CBOTTOM,CRIGHT-1,CBOTTOM
+    dw CLEFT+1,CMIDY,CRIGHT-1,CTOP
+    dw CLEFT+1,CMIDY,CRIGHT-1,CBOTTOM
+    dw CLEFT,CTOP,CMIDX,CMIDY
+    dw CMIDX,CTOP,CMIDX,CMIDY
+    dw CMIDX,CMIDY,CRIGHT,CTOP
+    dw CMIDX,CMIDY,CLEFT,CBOTTOM
+    dw CMIDX,CMIDY,CMIDX,CBOTTOM
+    dw CMIDX,CMIDY,CRIGHT,CBOTTOM
+
 
 CharacterTable:
     dw 1+2+4+16+32+64           // 0
@@ -656,19 +682,3 @@ CharacterTable:
     dw 512+2048+8192            // Y
     dw 1+2048+4096+64           // Z
 
-CharacterSegmentTable:
-    dw 1,0,2,0
-    dw 0,1,0,2
-    dw 3,1,3,2
-    dw 1,3,2,3
-    dw 0,4,0,5
-    dw 3,4,3,5
-    dw 1,6,2,6
-    dw 1,2,2,1
-    dw 1,4,2,5
-    dw 0,1,1,2
-    dw 1,1,1,3
-    dw 2,2,3,1
-    dw 0,5,1,4
-    dw 1,3,1,5
-    dw 2,4,3,5
