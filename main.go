@@ -13,6 +13,7 @@ import (
 var inputPath = flag.String("i", "", "Input file")
 var sysmon = flag.Bool("m", false, "Open system monitor")
 var runFlag = flag.Bool("r", false, "assemble and run")
+var traceFlag = flag.Bool("h", false, "trace i/o")
 
 func main() {
 	flag.Parse()
@@ -38,6 +39,7 @@ func main() {
 			if !linker.HasErrors() {
 				if *runFlag {
 					m := machine.NewMachine(linker.Code())
+					m.SetTraceIO(*traceFlag)
 					m.Run()
 				} else {
 					file, err := os.Open(*inputPath)
@@ -63,6 +65,7 @@ func main() {
 			panic(err)
 		}
 		m := machine.NewMachine(bytes)
+		m.SetTraceIO(*traceFlag)
 		if *sysmon {
 			monitor := &Monitor{machine: m}
 			monitor.Run()

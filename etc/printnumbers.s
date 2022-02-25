@@ -6,8 +6,7 @@ IOREQ   = 6
 IORES   = 8
 
         org 0x10
-myreq:  dw 1        // stdout
-        dw 1        // putchars
+myreq:  dw 0x0101   // stdout putchars
         dw 0        // pointer to zero terminated string
 
 buffer: ds 10       // max 10 digits
@@ -43,7 +42,7 @@ PrintInteger(value word):
         psh value
         psh #buffer
         jsr WordToAscii
-        pop myreq+4
+        pop myreq+2
         pop #2
         cpy IOREQ, #myreq
         ret

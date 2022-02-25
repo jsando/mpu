@@ -1,75 +1,57 @@
 package machine
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"github.com/veandco/go-sdl2/sdl"
 	"os"
 )
 
-// SDLDevice provides a graphics adapter via go-sdl2.
-type SDLDevice struct {
-	machine  *Machine
-	handlers []SDLHandler
-	window   *sdl.Window
-	renderer *sdl.Renderer
+const (
+	SdlDeviceId = 0x0200
+	SdlInit     = 1
+	SdlPoll     = 2
+	SdlPresent  = 3
+	SdlClear    = 4
+	SdlSetColor = 5
+	SdlDrawLine = 6
+	SdlDrawRect = 7
+	SdlFillRect = 8
+)
+
+// I feel SO DIRTY having a global var but don't see how to encapsulate this better.
+// The handlers can't have unexported fields because that breaks encoding/binary :(
+var window *sdl.Window
+var renderer *sdl.Renderer
+
+func RegisterSDLHandlers(m *Machine) {
+	m.RegisterIOHandler(SdlDeviceId|SdlInit, &SdlInitHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlPoll, &SdlPollHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlPresent, &SdlPresentHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlClear, &SdlClearHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlSetColor, &SdlSetColorHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlDrawLine, &SdlDrawLineHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlDrawRect, &SdlDrawRectHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlFillRect, &SdlFillRectHandler{})
 }
 
-type SDLHandler interface {
-	Exec(d *SDLDevice, addr uint16) uint16
+type SdlInitHandler struct {
+	Id     uint16
+	Width  uint16
+	Height uint16
+	Title  uint16 // Pointer to zstring
 }
 
-func NewSDLDevice(machine *Machine) *SDLDevice {
-	d := &SDLDevice{
-		machine: machine,
-	}
-	d.handlers = []SDLHandler{
-		1: &CmdSDLInit{},
-		&CmdSDLPollEvents{},
-		&CmdSDLPresent{},
-		&CmdSDLClear{},
-		&CmdSDLSetColor{},
-		&CmdSDLDrawLine{},
-		&CmdSDLDrawRect{},
-		&CmdSDLFillRect{},
-	}
-	return d
-}
-
-func (d *SDLDevice) Invoke(machine *Machine, addr uint16) uint16 {
-	cmd := int(machine.readUint16(addr + 2))
-	if cmd >= len(d.handlers) || d.handlers[cmd] == nil {
-		return ErrInvalidCommand
-	}
-	handler := d.handlers[cmd]
-	err := binary.Read(bytes.NewReader(d.machine.memory[addr:]), binary.LittleEndian, handler)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error decoding io request command=%d, error=%s\n", cmd, err.Error())
-		return ErrIOError
-	}
-	return handler.Exec(d, addr)
-}
-
-type CmdSDLInit struct {
-	Device  uint16
-	Command uint16
-	Width   uint16
-	Height  uint16
-	Title   uint16 // Pointer to zstring
-}
-
-func (c *CmdSDLInit) Exec(d *SDLDevice, addr uint16) uint16 {
-	winTitle := d.machine.ReadString(c.Title)
+func (c *SdlInitHandler) Handle(m *Machine, addr uint16) uint16 {
+	winTitle := m.ReadString(c.Title)
 	//fmt.Printf("execInit: %v, title: '%s'\n", c, winTitle)
-	window, err := sdl.CreateWindow(winTitle, sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED,
+	var err error
+	window, err = sdl.CreateWindow(winTitle, sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED,
 		int32(c.Width), int32(c.Height), sdl.WINDOW_SHOWN)
 	if err != nil {
 		fmt.Printf("error creating SDL window: %s", err.Error())
 		return ErrIOError
 	}
-	d.window = window
-	d.renderer, err = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
+	renderer, err = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
 		fmt.Printf("Failed to create renderer: %s\n", err)
 		return ErrIOError
@@ -77,15 +59,14 @@ func (c *CmdSDLInit) Exec(d *SDLDevice, addr uint16) uint16 {
 	return ErrNoErr
 }
 
-type CmdSDLPollEvents struct {
-	Device    uint16
-	Command   uint16
+type SdlPollHandler struct {
+	Id        uint16
 	EventType uint16 // space for response
 	Timestamp uint16 // space for response
 }
 
-func (c *CmdSDLPollEvents) Exec(d *SDLDevice, addr uint16) uint16 {
-	if d.window == nil {
+func (c *SdlPollHandler) Handle(m *Machine, addr uint16) uint16 {
+	if window == nil {
 		fmt.Printf("sdl not initialized, can't poll\n")
 		return ErrIOError
 	}
@@ -101,30 +82,29 @@ func (c *CmdSDLPollEvents) Exec(d *SDLDevice, addr uint16) uint16 {
 		timestamp = uint16(event.GetTimestamp() / 250)
 		//fmt.Printf("sdl poll events (event=%d, time=%d)\n", eventType, timestamp)
 	}
-	d.machine.writeUint16(addr+4, eventType)
-	d.machine.writeUint16(addr+6, timestamp)
+	m.writeUint16(addr+2, eventType)
+	m.writeUint16(addr+4, timestamp)
 
 	switch t := event.(type) {
 	case *sdl.KeyboardEvent:
 		keyCode := uint16(t.Keysym.Sym)
-		d.machine.writeUint16(addr+8, keyCode)
+		m.writeUint16(addr+6, keyCode)
 	}
 	return ErrNoErr
 }
 
-type CmdSDLSetColor struct {
-	Device     uint16
-	Command    uint16
+type SdlSetColorHandler struct {
+	Id         uint16
 	R, G, B, A uint8
 }
 
-func (c CmdSDLSetColor) Exec(d *SDLDevice, addr uint16) uint16 {
-	if d.renderer == nil {
+func (c SdlSetColorHandler) Handle(m *Machine, addr uint16) uint16 {
+	if renderer == nil {
 		fmt.Printf("error in setcolor, sdl not initialized\n")
 		return ErrIOError
 	}
 	//fmt.Printf("setcolor %v\n", c)
-	err := d.renderer.SetDrawColor(c.R, c.G, c.B, c.A)
+	err := renderer.SetDrawColor(c.R, c.G, c.B, c.A)
 	if err != nil {
 		fmt.Printf("setcolor error: %s\n", err.Error())
 		return ErrIOError
@@ -132,33 +112,31 @@ func (c CmdSDLSetColor) Exec(d *SDLDevice, addr uint16) uint16 {
 	return ErrNoErr
 }
 
-type CmdSDLClear struct {
-	Device  uint16
-	Command uint16
+type SdlClearHandler struct {
+	Id uint16
 }
 
-func (c *CmdSDLClear) Exec(d *SDLDevice, addr uint16) uint16 {
-	if d.renderer == nil {
+func (c *SdlClearHandler) Handle(m *Machine, addr uint16) uint16 {
+	if renderer == nil {
 		fmt.Printf("error in clear, sdl not initialized\n")
 		return ErrIOError
 	}
-	d.renderer.Clear()
+	renderer.Clear()
 	return ErrNoErr
 }
 
-type CmdSDLDrawLine struct {
-	Device         uint16
-	Command        uint16
+type SdlDrawLineHandler struct {
+	Id             uint16
 	X1, Y1, X2, Y2 uint16
 }
 
-func (c CmdSDLDrawLine) Exec(d *SDLDevice, addr uint16) uint16 {
-	if d.renderer == nil {
+func (c SdlDrawLineHandler) Handle(m *Machine, addr uint16) uint16 {
+	if renderer == nil {
 		fmt.Printf("error in drawline, sdl not initialized\n")
 		return ErrIOError
 	}
 	//fmt.Printf("drawline: %v\n", c)
-	err := d.renderer.DrawLine(int32(c.X1), int32(c.Y1), int32(c.X2), int32(c.Y2))
+	err := renderer.DrawLine(int32(c.X1), int32(c.Y1), int32(c.X2), int32(c.Y2))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error in drawline: %s\n", err.Error())
 		return ErrIOError
@@ -166,14 +144,13 @@ func (c CmdSDLDrawLine) Exec(d *SDLDevice, addr uint16) uint16 {
 	return ErrNoErr
 }
 
-type CmdSDLDrawRect struct {
-	Device     uint16
-	Command    uint16
+type SdlDrawRectHandler struct {
+	Id         uint16
 	X, Y, W, H uint16
 }
 
-func (c *CmdSDLDrawRect) Exec(d *SDLDevice, addr uint16) uint16 {
-	if d.renderer == nil {
+func (c *SdlDrawRectHandler) Handle(m *Machine, addr uint16) uint16 {
+	if renderer == nil {
 		fmt.Printf("error in drawline, sdl not initialized\n")
 		return ErrIOError
 	}
@@ -182,7 +159,7 @@ func (c *CmdSDLDrawRect) Exec(d *SDLDevice, addr uint16) uint16 {
 	rect.Y = int32(c.Y)
 	rect.W = int32(c.W)
 	rect.H = int32(c.H)
-	err := d.renderer.DrawRect(&rect)
+	err := renderer.DrawRect(&rect)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error in drawrect: %s\n", err.Error())
 		return ErrIOError
@@ -190,14 +167,13 @@ func (c *CmdSDLDrawRect) Exec(d *SDLDevice, addr uint16) uint16 {
 	return ErrNoErr
 }
 
-type CmdSDLFillRect struct {
-	Device     uint16
-	Command    uint16
+type SdlFillRectHandler struct {
+	Id         uint16
 	X, Y, W, H uint16
 }
 
-func (c CmdSDLFillRect) Exec(d *SDLDevice, addr uint16) uint16 {
-	if d.renderer == nil {
+func (c SdlFillRectHandler) Handle(m *Machine, addr uint16) uint16 {
+	if renderer == nil {
 		fmt.Printf("error in drawline, sdl not initialized\n")
 		return ErrIOError
 	}
@@ -207,7 +183,7 @@ func (c CmdSDLFillRect) Exec(d *SDLDevice, addr uint16) uint16 {
 	rect.W = int32(c.W)
 	rect.H = int32(c.H)
 	//fmt.Printf("fillrect %v\n", rect)
-	err := d.renderer.FillRect(&rect)
+	err := renderer.FillRect(&rect)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error in drawrect: %s\n", err.Error())
 		return ErrIOError
@@ -215,20 +191,19 @@ func (c CmdSDLFillRect) Exec(d *SDLDevice, addr uint16) uint16 {
 	return ErrNoErr
 }
 
-type CmdSDLPresent struct {
-	Device  uint16
-	Command uint16
+type SdlPresentHandler struct {
+	Id      uint16
 	DelayMS uint16
 }
 
-func (c *CmdSDLPresent) Exec(d *SDLDevice, addr uint16) uint16 {
-	if d.renderer == nil {
+func (c *SdlPresentHandler) Handle(m *Machine, addr uint16) uint16 {
+	if renderer == nil {
 		fmt.Fprintf(os.Stderr, "SDL error, not initialized\n")
 		return ErrIOError
 	}
 	//gfx.StringColor(d.renderer, 16, 16, "GFX Demo", sdl.Color{0, 255, 0, 255})
 
-	d.renderer.Present()
+	renderer.Present()
 	if c.DelayMS > 0 {
 		sdl.Delay(uint32(c.DelayMS))
 	}

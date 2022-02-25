@@ -35,16 +35,16 @@ func TestOpString(t *testing.T) {
 
 func TestReadWrite(t *testing.T) {
 	machine := NewMachine([]byte{})
-	machine.WriteWord(10, 0x1122)
-	if machine.memory[10] != 0x22 || machine.memory[11] != 0x11 {
+	machine.WriteWord(16, 0x1122)
+	if machine.memory[16] != 0x22 || machine.memory[17] != 0x11 {
 		t.Errorf("bad write")
 	}
-	val := machine.ReadWord(10)
+	val := machine.ReadWord(16)
 	if val != 0x1122 {
 		t.Errorf("bad read")
 	}
-	machine.writeTarget(10, 0)
-	if machine.memory[10] != 0 || machine.memory[11] != 0 {
+	machine.writeTarget(16, 0)
+	if machine.memory[16] != 0 || machine.memory[17] != 0 {
 		t.Errorf("bad rewrite")
 	}
 	if machine.negative {
@@ -53,14 +53,14 @@ func TestReadWrite(t *testing.T) {
 	if !machine.zero {
 		t.Error("zero flag should be set")
 	}
-	machine.writeTarget(10, 40000)
+	machine.writeTarget(16, 40000)
 	if !machine.negative {
 		t.Errorf("neg flag should be set")
 	}
 	if machine.zero {
 		t.Error("zero flag should be clear")
 	}
-	machine.writeTarget(10, -1)
+	machine.writeTarget(16, -1)
 	if !machine.negative {
 		t.Errorf("neg flag should be set")
 	}
@@ -107,30 +107,30 @@ func TestReadByte(t *testing.T) {
 
 func TestArithmetic(t *testing.T) {
 	tester := NewMachineTester(0x100, 0x1000)
-	tester.emit2(Cpy, Absolute, 10, Immediate, 2) // 2
-	tester.emit2(Add, Absolute, 10, Immediate, 2) // +2 = 4
-	tester.emit2(Sub, Absolute, 10, Immediate, 1) // -1 = 3
-	tester.emit2(Mul, Absolute, 10, Immediate, 5) // *5 = 15
-	tester.emit2(Div, Absolute, 10, Immediate, 3) // /3 = 5
+	tester.emit2(Cpy, Absolute, 20, Immediate, 2) // 2
+	tester.emit2(Add, Absolute, 20, Immediate, 2) // +2 = 4
+	tester.emit2(Sub, Absolute, 20, Immediate, 1) // -1 = 3
+	tester.emit2(Mul, Absolute, 20, Immediate, 5) // *5 = 15
+	tester.emit2(Div, Absolute, 20, Immediate, 3) // /3 = 5
 	tester.execute()
-	tester.addressContains(t, 10, 5)
+	tester.addressContains(t, 20, 5)
 }
 
 func TestBitops(t *testing.T) {
 	tester := NewMachineTester(0x100, 0x1000)
-	tester.emit2(Or, Absolute, 10, Immediate, 0xc0c0)
-	tester.emit2(And, Absolute, 10, Immediate, 0x4040)
-	tester.emit2(Xor, Absolute, 10, Immediate, 0x0040)
+	tester.emit2(Or, Absolute, 20, Immediate, 0xc0c0)
+	tester.emit2(And, Absolute, 20, Immediate, 0x4040)
+	tester.emit2(Xor, Absolute, 20, Immediate, 0x0040)
 	tester.execute()
-	tester.addressContains(t, 10, 0x4000)
+	tester.addressContains(t, 20, 0x4000)
 }
 
 func TestCompare(t *testing.T) {
 	tester := NewMachineTester(0x100, 0x1000)
-	tester.emit2(Cpy, Absolute, 10, Immediate, 123)
-	tester.emit2(Cmp, Absolute, 10, Immediate, 200)
+	tester.emit2(Cpy, Absolute, 20, Immediate, 123)
+	tester.emit2(Cmp, Absolute, 20, Immediate, 200)
 	tester.execute()
-	tester.addressContains(t, 10, 123)
+	tester.addressContains(t, 20, 123)
 	if !tester.machine.negative {
 		t.Errorf("neg flag should be set")
 	}
@@ -140,9 +140,9 @@ func TestStackops(t *testing.T) {
 	tester := NewMachineTester(0x100, 0x1000)
 	tester.emit1(Psh, Immediate, 123)
 	tester.emit1(Psh, Immediate, 456)
-	tester.emit1(Pop, Absolute, 10)
+	tester.emit1(Pop, Absolute, 20)
 	tester.execute()
-	tester.addressContains(t, 10, 456)
+	tester.addressContains(t, 20, 456)
 	if tester.machine.negative {
 		t.Errorf("neg flag should not be set")
 	}
@@ -158,10 +158,10 @@ func TestStackops(t *testing.T) {
 func TestJump(t *testing.T) {
 	tester := NewMachineTester(0x100, 0x1000)
 	tester.emit1(Jmp, Immediate, 0x108)
-	tester.emit2(Cpy, Absolute, 10, Immediate, 123)
-	tester.emit2(Cpy, Absolute, 10, Immediate, 456)
+	tester.emit2(Cpy, Absolute, 20, Immediate, 123)
+	tester.emit2(Cpy, Absolute, 20, Immediate, 456)
 	tester.execute()
-	tester.addressContains(t, 10, 456)
+	tester.addressContains(t, 20, 456)
 }
 
 type MachineTester struct {

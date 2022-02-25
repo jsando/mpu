@@ -1,6 +1,8 @@
 package machine
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand"
@@ -20,42 +22,46 @@ const (
 // Machine implements MPU ... memory processing unit.
 // It supports 27 instructions and 6 addressing modes.
 type Machine struct {
-	memory   []byte // 64kb of memory
-	pc       uint16 // program counter ... shadowed on read/write to address $0
-	sp       uint16 // stack pointer ... shadowed on read/write to address $2
-	fp       uint16 // frame pointer ... shadowed on read/write to address $4
-	rgen     *rand.Rand
-	negative bool // Negative flag, set true if last value had the high bit set.
-	zero     bool // Zero flag, set true if last value had zero value.
-	carry    bool // Carry flag
-	bytes    bool // Bytes flag, if true then operations are on bytes instead of words
-	step     bool // Single step mode, if true breaks after executing 1 instruction
-	devices  []IODevice
+	memory     []byte            // 64kb of memory
+	pc         uint16            // program counter ... shadowed on read/write to address $0
+	sp         uint16            // stack pointer ... shadowed on read/write to address $2
+	fp         uint16            // frame pointer ... shadowed on read/write to address $4
+	rgen       *rand.Rand        // RNG mapped to address 0x0a
+	negative   bool              // Negative flag, set true if last value had the high bit set.
+	zero       bool              // Zero flag, set true if last value had zero value.
+	carry      bool              // Carry flag
+	bytes      bool              // Bytes flag, if true then operations are on bytes instead of words
+	ioHandlers map[int]IOHandler // Registered io handlers
+	step       bool              // Single step mode, if true breaks after executing 1 instruction
+	traceIO    bool              // If true, trace IO requests/responses
 }
 
-type IODevice interface {
-	Invoke(m *Machine, addr uint16) (err uint16)
+// IOHandler represents a single command handler within a device.  Handlers must
+// be registered via RegisterIOHandler.  When invoked, machine will use encoding/binary
+// to unmarshall the data pointed to into the handler and then call its Handle() method.
+type IOHandler interface {
+	Handle(m *Machine, addr uint16) (err uint16)
 }
 
 func NewMachine(image []byte) *Machine {
 	m := &Machine{
-		memory:  make([]byte, 65536),
-		pc:      0x100,
-		sp:      0xffff,
-		rgen:    rand.New(rand.NewSource(time.Now().UnixNano())),
-		devices: make([]IODevice, 256),
+		memory:     make([]byte, 65536),
+		pc:         0x100,
+		sp:         0xffff,
+		rgen:       rand.New(rand.NewSource(time.Now().UnixNano())),
+		ioHandlers: make(map[int]IOHandler),
 	}
 	copy(m.memory, image)
 	m.pc = m.readUint16(PCAddr)
 	m.sp = m.readUint16(SPAddr)
 	m.fp = m.readUint16(FPAddr)
-	m.RegisterDevice(&StdoutDevice{}, 1)
-	m.RegisterDevice(NewSDLDevice(m), 2)
+	RegisterStdIoHandlers(m)
+	RegisterSDLHandlers(m)
 	return m
 }
 
-func (m *Machine) RegisterDevice(device IODevice, deviceId int) {
-	m.devices[deviceId] = device
+func (m *Machine) RegisterIOHandler(id int, h IOHandler) {
+	m.ioHandlers[id] = h
 }
 
 func (m *Machine) readUint16(addr uint16) uint16 {
@@ -136,18 +142,24 @@ const (
 )
 
 func (m *Machine) execIORequest(addr int) {
-	deviceId := int(m.readUint16(uint16(addr)))
-	if deviceId >= len(m.devices) {
+	id := int(m.readUint16(uint16(addr)))
+	handler := m.ioHandlers[id]
+	if handler == nil {
 		m.writeUint16(IORes, ErrInvalidDevice)
+		fmt.Fprintf(os.Stderr, "io request to unknown handler (0x%04x)\n", id)
 		return
 	}
-	device := m.devices[deviceId]
-	if device == nil {
-		m.writeUint16(IORes, ErrInvalidDevice)
+	err := binary.Read(bytes.NewReader(m.memory[addr:]), binary.LittleEndian, handler)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "io request decode error (handler=0x%04x, error=%s)\n", id, err.Error())
+		m.writeUint16(IORes, ErrIOError)
 		return
 	}
-	err := device.Invoke(m, uint16(addr))
-	m.writeUint16(IORes, err)
+	errcode := handler.Handle(m, uint16(addr))
+	if m.traceIO || errcode != ErrNoErr {
+		fmt.Fprintf(os.Stderr, "io request (handler: 0x%04x, parameters: %v, status: %d)\n", id, handler, errcode)
+	}
+	m.writeUint16(IORes, errcode)
 }
 
 // Same as WriteWord but updates zero/minus flags
@@ -480,4 +492,8 @@ func (m *Machine) formatOperand(mode AddressMode, pc int) (op string, bytes int)
 		panic(fmt.Sprintf("illegal address mode: %d", mode))
 	}
 	return
+}
+
+func (m *Machine) SetTraceIO(b bool) {
+	m.traceIO = b
 }

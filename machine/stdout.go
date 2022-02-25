@@ -6,34 +6,36 @@ import (
 )
 
 const (
-	StdoutCommandNop uint16 = iota
-	StdoutCommandWrite
+	StdoutDeviceId     = 0x0100
+	StdoutCommandWrite = 1
 )
 
-type StdoutDevice struct {
+func RegisterStdIoHandlers(m *Machine) {
+	m.RegisterIOHandler(StdoutDeviceId|StdoutCommandWrite, &StdoutWriteHandler{})
 }
 
-func (d *StdoutDevice) Invoke(m *Machine, addr uint16) (err uint16) {
-	cmd := m.readUint16(addr + 2)
-	if cmd == StdoutCommandWrite {
-		_, err := io.Copy(os.Stdout, &NullbyteReader{
-			m:    m,
-			addr: m.readUint16(addr + 4),
-		})
-		if err != nil {
-			return ErrIOError
-		}
-		return ErrNoErr
+type StdoutWriteHandler struct {
+	Id       uint16
+	PZString uint16 // pointer to zero-terminated string
+}
+
+func (s *StdoutWriteHandler) Handle(m *Machine, addr uint16) (errCode uint16) {
+	_, err := io.Copy(os.Stdout, &ZStringReader{
+		m:    m,
+		addr: s.PZString,
+	})
+	if err != nil {
+		return ErrIOError
 	}
-	return ErrInvalidCommand
+	return ErrNoErr
 }
 
-type NullbyteReader struct {
+type ZStringReader struct {
 	m    *Machine
 	addr uint16
 }
 
-func (d *NullbyteReader) Read(p []byte) (n int, err error) {
+func (d *ZStringReader) Read(p []byte) (n int, err error) {
 	for n < len(p) {
 		b := d.m.memory[d.addr]
 		if b == 0 {

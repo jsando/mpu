@@ -29,12 +29,10 @@ main():
     jne draw_rects
 
     cpy IO_REQUEST, #io_present_req
-    sec
-    jcs loop
+    jmp loop
 
 .io_window_req
-    dw 2    // device id = graphics
-    dw 1    // command = create window
+    dw 0x0201
     dw 640  // width
     dw 480  // height
     dw window_title
@@ -42,8 +40,7 @@ main():
     db "Hello World, from MPU!", 0
 
 .io_poll_req
-    dw 2
-    dw 2
+    dw 0x0202
 .io_poll_event
     dw 2
 .io_poll_time
@@ -51,17 +48,14 @@ main():
     ds 8 // space for event data
 
 .io_present_req
-    dw 2
-    dw 3
+    dw 0x0203
     dw 16 // delay ms
 
 .io_sdl_clear
-    dw 2
-    dw 4
+    dw 0x0204
 
 .io_sdl_setcolor
-    dw 2
-    dw 5
+    dw 0x0205
     db 0,0,0,255
 
 // result = value - (value / range * range)
@@ -132,13 +126,13 @@ RandomFilledRect():
     cpy IO_REQUEST, #rect
     ret
 
-.color      dw 2,5
+.color      dw 0x0205
 .color_r    db 0
 .color_g    db 0
 .color_b    db 0
 .color_a    db 255
 
-.rect       dw 2,8
+.rect       dw 0x0208
 .rect_x     dw 0
 .rect_y     dw 0
 .rect_w     dw 0
