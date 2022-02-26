@@ -113,25 +113,28 @@ Is effectively:
 
 # My todo list
 
-- Profile performance
-- Add include directive so I can start building reusable functions
-- Ugh ... really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
+- Really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
     - Suppose I could add a 1 byte (uint8) to relative-indirect, if none specified its zero?  My lovely byte savings go away :(
     - Tried it on some sample code and it cleans it up a lot
+- Add include directive so I can start building reusable functions
+    - Model after Go's input/stack/tokenizer ... maybe even add macros later on
+- Profile performance
 - a gofmt-equivalent would be nice.  I think the lexer would need a facelift, and the parser would need to emit 100% of the file as Statements, so the formatter could then walk that and output it cleanly.
-- Is there a way to add unit tests?  That would make writing short programs much more fun and easy to test.
-- Need to cleanup uint16 vs int everywhere, make up your mind
+- If there were a way to write unit tests in mpu, for mpu programs, that would provide an easy way to
+  iteratively code and run them.
 - cleanup
     - lexer
-        - encapsulate Scanner completely ... find calls to lexer.s.foo and fix them
-        - text.scanner leaves quotes on strings, ticks on chars, etc
+        - text.scanner leaves quotes on strings, ticks on chars, etc.  It should have an IntValue(), CharValue(), StringValue(), etc.
         - would token category help?  directive, opcode, etc
         - don't use text.Scanner ... just use my own.  Use $ instead of 0x, ; instead of //.
     - parser
         - review all the parse functions and make sure they follow the same pattern ... do they call lexer.next?
         - sometimes I use tok := lexer.next and sometimes lexer.tok
     - machine
-        - make updating the flags more explicit so I don't accidentally use writeTarget() for updating the sp for example
+        - Need to cleanup uint16 vs int everywhere, make up your mind
+        - Can I separate an abstraction for memory that takes all the byte/word/address abstractions into its own thing
+        - The registers are ints but mapped to a memory address ... that could also use an abstraction
+        - I wish the monitor code was separate
 - monitor needs a way to view stack contents ... not sure how though unless we know whether they are bytes or words
 - could I actually build a debugger that could inspect variables?
 
