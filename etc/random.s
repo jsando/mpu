@@ -1,25 +1,35 @@
 //---------------------------------------------------------
-//  Print the numbers from 1 to 100 to the console.
+//  Print a random number between 0 and 100.
 //---------------------------------------------------------
-
-        dw main
+		dw main
 
 IOREQ   = 6
 IORES   = 8
-
+				
         org 0x10
 main():
-        .i local word
-
-        cpy i, #1
-.loop
-        psh i
+        psh #0
+        psh #100
+        jsr Random
+        pop #2
         jsr PrintInteger
         pop #2
-        inc i
-        cmp i, #101
-        jlt loop
         hlt
+
+//
+// Generate a random word into 'result', in the range from [0, range).
+//		
+Random(result word, range word):
+    .i local word
+    .j local word
+    cpy i, 10   // get a random number in range 0-65535
+    cpy j, i        // value / range * range
+    div j, range
+    mul j, range
+    cpy result, i
+    sec
+    sub result, j
+    ret
 
 //
 // Print the word passed on the stack to stdout in decimal.
@@ -34,9 +44,9 @@ PrintInteger(value word):
         ret
 
 .ioPrintReq
-        dw 0x0101   // stdout putchars
+		dw 0x0101   // stdout putchars
         dw 0        // pointer to zero terminated string
-.buffer ds 11       // max 10 digits + null
+.buffer ds 10       // max 10 digits
 
 //
 // Convert the value passed in into ASCII decimal representation
