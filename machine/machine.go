@@ -78,7 +78,7 @@ func (m *Machine) ReadInt8(addr int) int {
 }
 
 func (m *Machine) ReadWord(addr int) int {
-	if addr < 16 {
+	if addr < 16 && addr != IORes {
 		return m.doSpecialReadWord(addr)
 	}
 	return int(m.memory[addr+1])<<8 + int(m.memory[addr])
@@ -496,4 +496,20 @@ func (m *Machine) formatOperand(mode AddressMode, pc int) (op string, bytes int)
 
 func (m *Machine) SetTraceIO(b bool) {
 	m.traceIO = b
+}
+
+func (m *Machine) ReadByte(addr uint16) byte {
+	if addr > 0x0f {
+		return m.memory[addr]
+	}
+	high := false
+	if addr%2 != 0 {
+		high = true
+		addr &= 0b1111_1110
+	}
+	word := m.doSpecialReadWord(int(addr))
+	if high {
+		return byte((word >> 8) & 0xff)
+	}
+	return byte(word & 0xff)
 }
