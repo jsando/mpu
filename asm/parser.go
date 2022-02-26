@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/jsando/mpu/machine"
 	"strconv"
-	"strings"
 )
 
 type Parser struct {
@@ -370,22 +369,13 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		}
 		expr = BytesLiteral{value: []byte(s)}
 	case TokInt:
-		text := p.lexer.TokenText()
-		var val int64
-		var err error
-		if strings.HasPrefix(text, "0x") {
-			// why the frick does text/scanner recognize ints in octal, hex, etc but not parse them for me????
-			// todo: move this shit to the lexer.  also encapsulate the scanner so it don't do p.lexer.s.XXX anymore
-			s := text[2:]
-			val, err = strconv.ParseInt(s, 16, 32)
-			if err != nil {
-				p.errorf("invalid integer literal '%s'", text)
-			}
-		} else {
-			val, err = strconv.ParseInt(text, 10, 32)
-			if err != nil {
-				p.errorf("invalid integer literal '%s'", text)
-			}
+		// strconv.ParseInt, if passed bitSize=0, will use Go's syntax for literals
+		// such as 0b, 0x, underscores, etc.
+		// ParseInt assumes signed types so have to pass bitSize=32 otherwise
+		// would error on uint16 > 32767.
+		val, err := strconv.ParseInt(p.lexer.TokenText(), 0, 32)
+		if err != nil {
+			p.errorf("invalid integer literal '%s'", p.lexer.TokenText())
 		}
 		expr = IntLiteral{value: int(val)}
 	case TokChar:
