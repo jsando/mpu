@@ -39,7 +39,6 @@ func main() {
 			if !linker.HasErrors() {
 				if *runFlag {
 					m := machine.NewMachine(linker.Code())
-					m.SetTraceIO(*traceFlag)
 					m.Run()
 				} else {
 					file, err := os.Open(*inputPath)
@@ -65,9 +64,8 @@ func main() {
 			panic(err)
 		}
 		m := machine.NewMachine(bytes)
-		m.SetTraceIO(*traceFlag)
 		if *sysmon {
-			monitor := &Monitor{machine: m}
+			monitor := &Monitor{machine: m, memory: m.Memory()}
 			monitor.Run()
 		} else {
 			m.Run()

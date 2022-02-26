@@ -33,20 +33,9 @@ func TestOpString(t *testing.T) {
 	}
 }
 
-func TestReadWrite(t *testing.T) {
+func TestWriteUpdatesFlags(t *testing.T) {
 	machine := NewMachine([]byte{})
-	machine.WriteWord(16, 0x1122)
-	if machine.memory[16] != 0x22 || machine.memory[17] != 0x11 {
-		t.Errorf("bad write")
-	}
-	val := machine.ReadWord(16)
-	if val != 0x1122 {
-		t.Errorf("bad read")
-	}
 	machine.writeTarget(16, 0)
-	if machine.memory[16] != 0 || machine.memory[17] != 0 {
-		t.Errorf("bad rewrite")
-	}
 	if machine.negative {
 		t.Errorf("neg flag should be cleared after zero write")
 	}
@@ -67,16 +56,16 @@ func TestReadWrite(t *testing.T) {
 	if machine.zero {
 		t.Error("zero flag should be clear")
 	}
-	// writeUint16 should not modify any flags
+	// PutWord should not modify any flags
 	machine.writeTarget(16, 1)
 	if machine.zero || machine.negative {
 		t.Error("s/b zero and not neg")
 	}
-	machine.writeUint16(16, 0)
+	machine.memory.PutWord(16, 0)
 	if machine.zero {
 		t.Error("zero flag should be clear")
 	}
-	machine.writeUint16(16, 65535) // make sure bit 16 doesn't trigger negative flag
+	machine.memory.PutWord(16, 65535) // make sure bit 16 doesn't trigger negative flag
 	if machine.negative {
 		t.Error("neg flag should be clear")
 	}
@@ -85,19 +74,10 @@ func TestReadWrite(t *testing.T) {
 func TestReadWritePC(t *testing.T) {
 	machine := NewMachine([]byte{})
 	machine.pc = 0x1234
-	if machine.ReadWord(PCAddr) != 0x1234 {
-		t.Errorf("expected 0x1234, got %0x", machine.ReadWord(PCAddr))
+	if machine.memory.GetWord(PCAddr) != 0x1234 {
+		t.Errorf("expected 0x1234, got %0x", machine.memory.GetWord(PCAddr))
 	}
-	if machine.memory[0] != 0 || machine.memory[1] != 0 {
-		t.Error("expected pc to still be zero in memory")
-	}
-	if machine.ReadByte(0) != 0x34 {
-		t.Errorf("expected readbyte(0)=0x34, got %0x", machine.ReadByte(0))
-	}
-	if machine.ReadByte(1) != 0x12 {
-		t.Errorf("expected readbyte(1)=0x12, got %0x", machine.ReadByte(0))
-	}
-	machine.WriteWord(PCAddr, 0x5555)
+	machine.memory.PutWord(PCAddr, 0x5555)
 	if machine.pc != 0x5555 {
 		t.Errorf("expected pc update, got: 0x%0x", machine.pc)
 	}
@@ -106,19 +86,10 @@ func TestReadWritePC(t *testing.T) {
 func TestReadWriteSP(t *testing.T) {
 	machine := NewMachine([]byte{})
 	machine.sp = 0x3579
-	if machine.ReadWord(SPAddr) != 0x3579 {
-		t.Errorf("expected 0x3579, got %0x", machine.ReadWord(SPAddr))
+	if machine.memory.GetWord(SPAddr) != 0x3579 {
+		t.Errorf("expected 0x3579, got %0x", machine.memory.GetWord(SPAddr))
 	}
-	if machine.memory[SPAddr] != 0 || machine.memory[SPAddr+1] != 0 {
-		t.Error("expected sp to still be zero in memory")
-	}
-	if machine.ReadByte(SPAddr) != 0x79 {
-		t.Errorf("expected readbyte(0)=0x79, got %0x", machine.ReadByte(SPAddr))
-	}
-	if machine.ReadByte(SPAddr+1) != 0x35 {
-		t.Errorf("expected readbyte(1)=0x35, got %0x", machine.ReadByte(SPAddr+1))
-	}
-	machine.WriteWord(SPAddr, 0x5555)
+	machine.memory.PutWord(SPAddr, 0x5555)
 	if machine.sp != 0x5555 {
 		t.Errorf("expected sp update, got: 0x%0x", machine.sp)
 	}
@@ -127,27 +98,18 @@ func TestReadWriteSP(t *testing.T) {
 func TestReadWriteFP(t *testing.T) {
 	machine := NewMachine([]byte{})
 	machine.fp = 0x3456
-	if machine.ReadWord(FPAddr) != 0x3456 {
-		t.Errorf("expected 0x1234, got %0x", machine.ReadWord(FPAddr))
+	if machine.memory.GetWord(FPAddr) != 0x3456 {
+		t.Errorf("expected 0x1234, got %0x", machine.memory.GetWord(FPAddr))
 	}
-	if machine.memory[FPAddr] != 0 || machine.memory[FPAddr+1] != 0 {
-		t.Error("expected fp to still be zero in memory")
-	}
-	if machine.ReadByte(FPAddr) != 0x56 {
-		t.Errorf("expected readbyte(0)=0x56, got %0x", machine.ReadByte(FPAddr))
-	}
-	if machine.ReadByte(FPAddr+1) != 0x34 {
-		t.Errorf("expected readbyte(1)=0x34, got %0x", machine.ReadByte(FPAddr+1))
-	}
-	machine.WriteWord(FPAddr, 0x5555)
+	machine.memory.PutWord(FPAddr, 0x5555)
 	if machine.fp != 0x5555 {
 		t.Errorf("expected fp update, got: 0x%0x", machine.fp)
 	}
 }
 
 func TestReadByte(t *testing.T) {
-	machine := NewMachine([]byte{7 ^ 0xff + 1})
-	val := machine.ReadInt8(0)
+	machine := NewMachine([]byte{20: 7 ^ 0xff + 1})
+	val := machine.ReadInt8(20)
 	if val != -7 {
 		t.Errorf("expected: -7, got: %d", val)
 	}
@@ -157,10 +119,10 @@ func TestRandom(t *testing.T) {
 	// Yeah yeah I should be using a set seed value to make this deterministic but instead:
 	// Pull 10 successive values and fail if they are all the same.
 	machine := NewMachine([]byte{})
-	r := machine.ReadWord(RandAddr)
+	r := machine.memory.GetWord(RandAddr)
 	same := true
 	for i := 0; i < 10; i++ {
-		r2 := machine.ReadWord(RandAddr)
+		r2 := machine.memory.GetWord(RandAddr)
 		if r != r2 {
 			same = false
 			break
@@ -171,34 +133,25 @@ func TestRandom(t *testing.T) {
 	}
 }
 
-func TestReadString(t *testing.T) {
-	machine := NewMachine([]byte{
-		20: 'h', 'e', 'l', 'l', 'o', 0,
-	})
-	s := machine.ReadString(20)
-	if s != "hello" {
-		t.Errorf("expected 'hello', got '%s'", s)
-	}
-}
-
 type testHandler struct {
 	Id        uint16
 	ByteParam uint8
 	WordParam uint16
 }
 
-func (t *testHandler) Handle(m *Machine, addr uint16) (err uint16) {
+func (t *testHandler) Handle(m Memory, addr uint16) (err uint16) {
 	return 42
 }
 
 func TestIO(t *testing.T) {
 	handler := &testHandler{}
-	machine := NewMachine([]byte{
+	iod := NewDispatcher()
+	iod.RegisterIOHandler(0x9999, handler)
+	machine := NewMachineWithDevices(iod, []byte{
 		20: 0x99, 0x99, 0x11, 0x33, 0x22,
 	})
-	machine.RegisterIOHandler(0x9999, handler)
-	machine.WriteWord(IOReq, 20)
-	result := machine.ReadWord(IORes)
+	machine.memory.PutWord(IOReqAddr, 20)
+	result := machine.memory.GetWord(IOStatAddr)
 	if result != 42 {
 		t.Errorf("expected 42, got: %d", result)
 	}
@@ -214,8 +167,11 @@ func TestArithmetic(t *testing.T) {
 	tester.emit2(Sub, Absolute, 20, Immediate, 1) // -1 = 3
 	tester.emit2(Mul, Absolute, 20, Immediate, 5) // *5 = 15
 	tester.emit2(Div, Absolute, 20, Immediate, 3) // /3 = 5
+	tester.emit2(Inc, Absolute, 20, Implied, 0)   // +1 = 6
+	tester.emit2(Inc, Absolute, 20, Implied, 0)   // +1 = 7
+	tester.emit2(Dec, Absolute, 20, Implied, 0)   // -1 = 6
 	tester.execute()
-	tester.addressContains(t, 20, 5)
+	tester.addressContains(t, 20, 6)
 }
 
 func TestBitops(t *testing.T) {
@@ -243,6 +199,7 @@ func TestStackops(t *testing.T) {
 	tester.emit1(Psh, Immediate, 123)
 	tester.emit1(Psh, Immediate, 456)
 	tester.emit1(Pop, Absolute, 20)
+	tester.emit1(Pop, ImmediateByte, 2)
 	tester.execute()
 	tester.addressContains(t, 20, 456)
 	if tester.machine.negative {
@@ -251,9 +208,9 @@ func TestStackops(t *testing.T) {
 	if tester.machine.zero {
 		t.Error("zero flag should not be set")
 	}
-	sp := tester.machine.ReadWord(SPAddr)
-	if sp != 0x1000-2 {
-		t.Errorf("exptected sp 0x1000-2 but got: 0x%0x", sp)
+	sp := tester.machine.memory.GetWord(SPAddr)
+	if sp != 0x1000 {
+		t.Errorf("exptected sp 0x1000 but got: 0x%0x", sp)
 	}
 }
 
@@ -312,8 +269,8 @@ func (c *MachineTester) execute() {
 	c.machine.Run()
 }
 
-func (c *MachineTester) addressContains(t *testing.T, address, value int) {
-	word := c.machine.ReadWord(address)
+func (c *MachineTester) addressContains(t *testing.T, address uint16, value int) {
+	word := int(c.machine.memory.GetWord(address))
 	if word != value {
 		t.Errorf("expected: 0x%0x, got: 0x%0x", value, word)
 	}

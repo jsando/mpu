@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/jsando/mpu/machine"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 type Monitor struct {
 	machine *machine.Machine
+	memory  machine.Memory
 	next    int // implied address if no address is provided
 }
 
@@ -79,7 +81,7 @@ func (m *Monitor) dump(cmd []string) {
 	if end < start {
 		end = start + 160 - 1
 	}
-	m.machine.Dump(os.Stdout, start, end)
+	m.Dump(os.Stdout, start, end)
 	m.next = end + 1
 }
 
@@ -92,7 +94,7 @@ func (m *Monitor) list(cmd []string) {
 		}
 		start = i
 	}
-	m.next = m.machine.List(os.Stdout, start, 20)
+	m.next = m.List(os.Stdout, start, 20)
 }
 
 func (m *Monitor) run(cmd []string) {
@@ -105,7 +107,7 @@ func (m *Monitor) run(cmd []string) {
 		}
 		addr = i
 	}
-	m.machine.RunAt(addr)
+	m.RunAt(addr)
 }
 
 func (m *Monitor) step(cmd []string) {
@@ -118,7 +120,7 @@ func (m *Monitor) step(cmd []string) {
 		}
 		addr = i
 	}
-	m.next = m.machine.Step(addr)
+	m.next = m.Step(addr)
 }
 
 func parseInt(s string) (int, error) {
@@ -128,4 +130,123 @@ func parseInt(s string) (int, error) {
 	}
 	i, err := strconv.ParseInt(s, 10, 16)
 	return int(i), err
+}
+
+func (m *Monitor) Dump(w io.Writer, start int, end int) {
+	ascii := make([]byte, 16)
+	charIndex := 0
+	flush := func() {
+		for charIndex < 16 {
+			ascii[charIndex] = ' '
+			charIndex++
+			fmt.Fprintf(w, "   ")
+		}
+		fmt.Fprintf(w, " |%s|\n", string(ascii))
+		charIndex = 0
+	}
+	for addr := start; addr <= end; addr++ {
+		if addr == start || charIndex == 16 {
+			if addr != start {
+				flush()
+			}
+			fmt.Fprintf(w, "%04x  ", addr)
+		}
+		ch := m.memory.GetByte(uint16(addr))
+		fmt.Fprintf(w, "%02x ", ch)
+		if ch >= 32 && ch <= 126 {
+			ascii[charIndex] = ch
+		} else {
+			ascii[charIndex] = '.'
+		}
+		charIndex++
+	}
+	flush()
+}
+
+// List will disassemble n instructions starting at addr, and return the
+// pc location following the last instruction.
+func (m *Monitor) List(w io.Writer, addr int, n int) int {
+	for i := 0; i < n; i++ {
+		in := m.memory.GetByte(uint16(addr))
+		op, m1, m2 := machine.DecodeOp(in)
+		bytes := 0
+		var args string
+		if m1 != machine.Implied && m2 != machine.Implied {
+			op1, n := m.formatOperand(m1, addr+1)
+			bytes += n
+			op2, n := m.formatOperand(m2, addr+1+n)
+			bytes += n
+			args = op1 + "," + op2
+		} else if m1 != machine.Implied && m2 == machine.Implied {
+			op1, n := m.formatOperand(m1, addr+1)
+			bytes += n
+			args = op1
+		}
+		fmt.Fprintf(w, "0x%04x  %02x ", addr, in)
+		for j := 0; j < 4; j++ {
+			if j < bytes {
+				fmt.Fprintf(w, "%02x ", m.memory.GetByte(uint16(addr+j+1)))
+			} else {
+				fmt.Fprintf(w, "   ")
+			}
+		}
+		fmt.Fprintf(w, "%s %s\n", op, args)
+		addr = addr + 1 + bytes
+	}
+	return addr
+}
+
+func (m *Monitor) RunAt(addr int) {
+	m.machine.RunAt(uint16(addr))
+}
+
+func (m *Monitor) Step(addr int) int {
+	m.List(os.Stdout, addr, 1)
+	next := m.machine.Step(uint16(addr))
+	flags := m.machine.Flags()
+	fmt.Printf("[status pc=%04x sp=%04x fp=%04x n=%d z=%d c=%d b=%d]\n",
+		flags.PC, flags.SP, flags.FP, boolInt(flags.Negative), boolInt(flags.Zero),
+		boolInt(flags.Carry), boolInt(flags.Bytes))
+	return int(next)
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func (m *Monitor) formatOperand(mode machine.AddressMode, pc int) (op string, bytes int) {
+	switch mode {
+	case machine.Implied:
+		// nothing to do
+	case machine.Immediate:
+		op = fmt.Sprintf("#0x%04x", m.memory.GetWord(uint16(pc)))
+		bytes = 2
+	case machine.ImmediateByte:
+		op = fmt.Sprintf("#0x%02x", m.machine.ReadInt8(uint16(pc)))
+		bytes = 1
+	case machine.OffsetByte:
+		value := m.machine.ReadInt8(uint16(pc))
+		op = fmt.Sprintf("0x%04x (%d)", (pc-1)+value, value)
+		bytes = 1
+	case machine.Absolute:
+		op = fmt.Sprintf("0x%04x", m.memory.GetWord(uint16(pc)))
+		bytes = 2
+	case machine.Indirect:
+		op = fmt.Sprintf("*0x%04x", m.memory.GetWord(uint16(pc)))
+		bytes = 2
+	case machine.Relative:
+		value := m.machine.ReadInt8(uint16(pc))
+		op = fmt.Sprintf("fp%+d", value)
+		bytes = 1
+	case machine.RelativeIndirect:
+		value := m.machine.ReadInt8(uint16(pc))
+		op = fmt.Sprintf("*fp%+d", value)
+		bytes = 1
+	default:
+		panic(fmt.Sprintf("illegal address mode: %d", mode))
+	}
+	return
 }

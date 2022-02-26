@@ -23,7 +23,7 @@ const (
 var window *sdl.Window
 var renderer *sdl.Renderer
 
-func RegisterSDLHandlers(m *Machine) {
+func RegisterSDLHandlers(m *IODispatcher) {
 	m.RegisterIOHandler(SdlDeviceId|SdlInit, &SdlInitHandler{})
 	m.RegisterIOHandler(SdlDeviceId|SdlPoll, &SdlPollHandler{})
 	m.RegisterIOHandler(SdlDeviceId|SdlPresent, &SdlPresentHandler{})
@@ -41,8 +41,8 @@ type SdlInitHandler struct {
 	Title  uint16 // Pointer to zstring
 }
 
-func (c *SdlInitHandler) Handle(m *Machine, addr uint16) uint16 {
-	winTitle := m.ReadString(c.Title)
+func (c *SdlInitHandler) Handle(m Memory, addr uint16) uint16 {
+	winTitle := m.ReadZString(c.Title)
 	//fmt.Printf("execInit: %v, title: '%s'\n", c, winTitle)
 	var err error
 	window, err = sdl.CreateWindow(winTitle, sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED,
@@ -65,7 +65,7 @@ type SdlPollHandler struct {
 	Timestamp uint16 // space for response
 }
 
-func (c *SdlPollHandler) Handle(m *Machine, addr uint16) uint16 {
+func (c *SdlPollHandler) Handle(m Memory, addr uint16) uint16 {
 	if window == nil {
 		fmt.Printf("sdl not initialized, can't poll\n")
 		return ErrIOError
@@ -82,13 +82,13 @@ func (c *SdlPollHandler) Handle(m *Machine, addr uint16) uint16 {
 		timestamp = uint16(event.GetTimestamp() / 250)
 		//fmt.Printf("sdl poll events (event=%d, time=%d)\n", eventType, timestamp)
 	}
-	m.writeUint16(addr+2, eventType)
-	m.writeUint16(addr+4, timestamp)
+	m.PutWord(addr+2, eventType)
+	m.PutWord(addr+4, timestamp)
 
 	switch t := event.(type) {
 	case *sdl.KeyboardEvent:
 		keyCode := uint16(t.Keysym.Sym)
-		m.writeUint16(addr+6, keyCode)
+		m.PutWord(addr+6, keyCode)
 	}
 	return ErrNoErr
 }
@@ -98,7 +98,7 @@ type SdlSetColorHandler struct {
 	R, G, B, A uint8
 }
 
-func (c SdlSetColorHandler) Handle(m *Machine, addr uint16) uint16 {
+func (c SdlSetColorHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
 		fmt.Printf("error in setcolor, sdl not initialized\n")
 		return ErrIOError
@@ -116,7 +116,7 @@ type SdlClearHandler struct {
 	Id uint16
 }
 
-func (c *SdlClearHandler) Handle(m *Machine, addr uint16) uint16 {
+func (c *SdlClearHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
 		fmt.Printf("error in clear, sdl not initialized\n")
 		return ErrIOError
@@ -130,7 +130,7 @@ type SdlDrawLineHandler struct {
 	X1, Y1, X2, Y2 uint16
 }
 
-func (c SdlDrawLineHandler) Handle(m *Machine, addr uint16) uint16 {
+func (c SdlDrawLineHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
 		fmt.Printf("error in drawline, sdl not initialized\n")
 		return ErrIOError
@@ -149,7 +149,7 @@ type SdlDrawRectHandler struct {
 	X, Y, W, H uint16
 }
 
-func (c *SdlDrawRectHandler) Handle(m *Machine, addr uint16) uint16 {
+func (c *SdlDrawRectHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
 		fmt.Printf("error in drawline, sdl not initialized\n")
 		return ErrIOError
@@ -172,7 +172,7 @@ type SdlFillRectHandler struct {
 	X, Y, W, H uint16
 }
 
-func (c SdlFillRectHandler) Handle(m *Machine, addr uint16) uint16 {
+func (c SdlFillRectHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
 		fmt.Printf("error in drawline, sdl not initialized\n")
 		return ErrIOError
@@ -196,7 +196,7 @@ type SdlPresentHandler struct {
 	DelayMS uint16
 }
 
-func (c *SdlPresentHandler) Handle(m *Machine, addr uint16) uint16 {
+func (c *SdlPresentHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
 		fmt.Fprintf(os.Stderr, "SDL error, not initialized\n")
 		return ErrIOError

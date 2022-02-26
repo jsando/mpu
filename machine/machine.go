@@ -1,211 +1,90 @@
 package machine
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
-	"io"
-	"math/rand"
-	"os"
 	"time"
 )
 
 const (
-	PCAddr   = 0  // Program counter
-	SPAddr   = 2  // Stack pointer, points to last byte written
-	FPAddr   = 4  // Frame pointer
-	IOReq    = 6  // Address of I/O commands are written here to execute
-	IORes    = 8  // I/O status of last command, 0 = success, != 0 error
-	RandAddr = 10 // Writes are ignored, reads return random uint8/uint16
+	PCAddr     = 0  // Program counter
+	SPAddr     = 2  // Stack pointer, points to last byte written
+	FPAddr     = 4  // Frame pointer
+	IOReqAddr  = 6  // Address of I/O commands are written here to execute
+	IOStatAddr = 8  // I/O status of last command, 0 = success, != 0 error
+	RandAddr   = 10 // Writes are ignored, reads return random uint8/uint16
 )
 
 // Machine implements MPU ... memory processing unit.
 // It supports 27 instructions and 6 addressing modes.
 type Machine struct {
-	memory     []byte            // 64kb of memory
-	pc         uint16            // program counter ... shadowed on read/write to address $0
-	sp         uint16            // stack pointer ... shadowed on read/write to address $2
-	fp         uint16            // frame pointer ... shadowed on read/write to address $4
-	rgen       *rand.Rand        // RNG mapped to address 0x0a
-	negative   bool              // Negative flag, set true if last value had the high bit set.
-	zero       bool              // Zero flag, set true if last value had zero value.
-	carry      bool              // Carry flag
-	bytes      bool              // Bytes flag, if true then operations are on bytes instead of words
-	ioHandlers map[int]IOHandler // Registered io handlers
-	step       bool              // Single step mode, if true breaks after executing 1 instruction
-	traceIO    bool              // If true, trace IO requests/responses
+	memory   Memory // 64kb of memory + dma overlay
+	pc       uint16 // program counter ... shadowed on read/write to address $0
+	sp       uint16 // stack pointer ... shadowed on read/write to address $2
+	fp       uint16 // frame pointer ... shadowed on read/write to address $4
+	negative bool   // Negative flag, set true if last value had the high bit set.
+	zero     bool   // Zero flag, set true if last value had zero value.
+	carry    bool   // Carry flag
+	bytes    bool   // Bytes flag, if true then operations are on bytes instead of words
+	step     bool   // Single step mode, if true breaks after executing 1 instruction
 }
 
-// IOHandler represents a single command handler within a device.  Handlers must
-// be registered via RegisterIOHandler.  When invoked, machine will use encoding/binary
-// to unmarshall the data pointed to into the handler and then call its Handle() method.
-type IOHandler interface {
-	Handle(m *Machine, addr uint16) (err uint16)
-}
-
-func NewMachine(image []byte) *Machine {
+func NewMachineWithDevices(d *IODispatcher, image []byte) *Machine {
+	// Hoist up initial register values from raw image, if provided.
+	// This could be moved into the ByteSliceMemory constructor, except
+	// not all Memory objects support this ... writes to the IODispatcher
+	// will trigger an IO request.
 	m := &Machine{
-		memory:     make([]byte, 65536),
-		pc:         0x100,
-		sp:         0xffff,
-		rgen:       rand.New(rand.NewSource(time.Now().UnixNano())),
-		ioHandlers: make(map[int]IOHandler),
+		pc: readOrDefault(image, PCAddr, 0x100),
+		sp: readOrDefault(image, SPAddr, 0xffff),
+		fp: readOrDefault(image, FPAddr, 0),
 	}
-	copy(m.memory, image)
-	m.pc = m.readUint16(PCAddr)
-	m.sp = m.readUint16(SPAddr)
-	m.fp = m.readUint16(FPAddr)
-	RegisterStdIoHandlers(m)
-	RegisterSDLHandlers(m)
+	var unused1 uint16
+	var unused2 uint16
+	memory := NewByteSliceMemory(
+		[]Memory{
+			&Register{value: &m.pc},
+			&Register{value: &m.sp},
+			&Register{value: &m.fp},
+			d,
+			d.StatusRegister(),
+			NewRNG(time.Now().Unix()),
+			&Register{&unused1}, // Currently, 2 unused registers
+			&Register{&unused2},
+		},
+		image,
+	)
+	m.memory = memory
+	d.memory = memory
 	return m
 }
 
-func (m *Machine) RegisterIOHandler(id int, h IOHandler) {
-	m.ioHandlers[id] = h
+func NewMachine(image []byte) *Machine {
+	ioRequest := NewDefaultDispatcher()
+	return NewMachineWithDevices(ioRequest, image)
 }
 
-func (m *Machine) readUint16(addr uint16) uint16 {
-	return uint16(m.memory[addr+1])<<8 + uint16(m.memory[addr])
-}
-
-func (m *Machine) writeUint16(addr uint16, val uint16) {
-	m.memory[addr] = byte(val & 0xff)
-	m.memory[addr+1] = byte(val >> 8 & 0xff)
-}
-
-func (m *Machine) ReadInt8(addr int) int {
-	return int(int8(m.memory[addr]))
-}
-
-func (m *Machine) ReadWord(addr int) int {
-	if addr < 16 && addr != IORes {
-		return m.doSpecialReadWord(addr)
-	}
-	return int(m.memory[addr+1])<<8 + int(m.memory[addr])
-}
-
-func (m *Machine) doSpecialReadWord(addr int) int {
-	if addr == PCAddr {
-		return int(m.pc)
-	}
-	if addr == SPAddr {
-		return int(m.sp)
-	}
-	if addr == FPAddr {
-		return int(m.fp)
-	}
-	if addr == RandAddr {
-		return int(uint16(m.rgen.Intn(65536)))
-	}
-	return 0
-}
-
-// ReadString reads a null-terminated string from memory.
-func (m *Machine) ReadString(addr uint16) string {
-	buf := m.memory[addr:]
-	i := 0
-	for _, b := range buf {
-		if b == 0 {
-			break
-		}
-		i++
-	}
-	return string(buf[:i])
-}
-
-func (m *Machine) WriteWord(addr, value int) {
-	if addr < 16 {
-		m.doSpecialWriteWord(addr, value)
-	} else {
-		m.memory[addr] = byte(value & 0xff)
-		m.memory[addr+1] = byte(value >> 8 & 0xff)
-	}
-}
-
-func (m *Machine) doSpecialWriteWord(addr int, value int) {
-	if addr == PCAddr {
-		m.pc = uint16(value)
-	} else if addr == SPAddr {
-		m.sp = uint16(value)
-	} else if addr == FPAddr {
-		m.fp = uint16(value)
-	} else if addr == IOReq {
-		m.execIORequest(value)
-	}
-}
-
-const (
-	ErrNoErr uint16 = iota
-	ErrInvalidDevice
-	ErrInvalidCommand
-	ErrIOError
-)
-
-func (m *Machine) execIORequest(addr int) {
-	id := int(m.readUint16(uint16(addr)))
-	handler := m.ioHandlers[id]
-	if handler == nil {
-		m.writeUint16(IORes, ErrInvalidDevice)
-		fmt.Fprintf(os.Stderr, "io request to unknown handler (0x%04x)\n", id)
-		return
-	}
-	err := binary.Read(bytes.NewReader(m.memory[addr:]), binary.LittleEndian, handler)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "io request decode error (handler=0x%04x, error=%s)\n", id, err.Error())
-		m.writeUint16(IORes, ErrIOError)
-		return
-	}
-	errcode := handler.Handle(m, uint16(addr))
-	if m.traceIO || errcode != ErrNoErr {
-		fmt.Fprintf(os.Stderr, "io request (handler: 0x%04x, parameters: %v, status: %d)\n", id, handler, errcode)
-	}
-	m.writeUint16(IORes, errcode)
-}
-
-// Same as WriteWord but updates zero/minus flags
-func (m *Machine) writeTarget(addr, value int) {
-	if m.bytes {
-		if addr == PCAddr || addr == SPAddr || addr == FPAddr {
-			panic("attempt to write byte value to pc/sp/fp")
-		}
-		m.memory[addr] = byte(value)
-		m.updateFlagsByte(value)
-		//fmt.Printf("  0x%04x <- 0x%02x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
-	} else {
-		m.WriteWord(addr, value)
-		m.updateFlagsWord(value)
-		//fmt.Printf("  0x%04x <- 0x%04x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
-	}
-}
-
-func (m *Machine) updateFlagsByte(value int) {
-	m.negative = value&0x80 != 0
-	m.zero = value == 0
-}
-
-func (m *Machine) updateFlagsWord(value int) {
-	m.negative = value&0x8000 != 0
-	m.zero = value == 0
+func (m *Machine) Memory() Memory {
+	return m.memory
 }
 
 func (m *Machine) Run() {
 	for {
-		in := m.memory[m.pc]
+		in := m.memory.GetByte(m.pc)
 		if in == 0 {
 			return
 		}
-		n := 0      // Number of bytes for each operand
-		bytes := 0  // Total count of operand bytes (to skip pc to next instruction)
-		target := 0 // the address being updated, ie often the address of value1
-		value1 := 0 // value of first operand, if any
-		value2 := 0 // value of second operand, if any
+		var n uint16      // Number of bytes for each operand
+		var bytes uint16  // Total count of operand bytes (to skip pc to next instruction)
+		var target uint16 // the address being updated, ie often the address of value1
+		value1 := 0       // value of first operand, if any
+		value2 := 0       // value of second operand, if any
 		opCode, m1, m2 := DecodeOp(in)
 		if m1 != Implied {
-			target, value1, n = m.fetchOperand(m1, int(m.pc+1))
+			target, value1, n = m.fetchOperand(m1, m.pc+1)
 			bytes = n
 		}
 		if m2 != Implied {
-			_, value2, n = m.fetchOperand(m2, int(m.pc+1)+bytes)
+			_, value2, n = m.fetchOperand(m2, m.pc+1+bytes)
 			bytes += n
 		}
 		m.pc = m.pc + uint16(bytes) + 1
@@ -239,12 +118,12 @@ func (m *Machine) Run() {
 			} else {
 				m.sp -= 2
 			}
-			m.writeTarget(int(m.sp), value1)
+			m.writeTarget(m.sp, value1)
 		case Pop:
 			if m1 == ImmediateByte {
 				m.sp += uint16(value1)
 			} else {
-				m.writeTarget(target, m.ReadWord(int(m.sp)))
+				m.writeTarget(target, int(m.memory.GetWord(m.sp)))
 				if m.bytes {
 					m.sp += 1
 				} else {
@@ -308,35 +187,64 @@ func (m *Machine) Run() {
 	}
 }
 
+// ReadInt8 reads the given addr from memory as a byte and casts it to a signed int8 (as an int).
+func (m *Machine) ReadInt8(addr uint16) int {
+	return int(int8(m.memory.GetByte(addr)))
+}
+
+// writeTarget writes the new value to the given addr, and updates the various MPU flags
+// such as zero and negative.
+func (m *Machine) writeTarget(addr uint16, value int) {
+	if m.bytes {
+		m.memory.PutByte(addr, byte(value))
+		m.updateFlagsByte(value)
+		//fmt.Printf("  0x%04x <- 0x%02x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
+	} else {
+		m.memory.PutWord(addr, uint16(value))
+		m.updateFlagsWord(value)
+		//fmt.Printf("  0x%04x <- 0x%04x [z:%t, n:%t]\n", addr, value, m.zero, m.negative)
+	}
+}
+
+func (m *Machine) updateFlagsByte(value int) {
+	m.negative = value&0x80 != 0
+	m.zero = value == 0
+}
+
+func (m *Machine) updateFlagsWord(value int) {
+	m.negative = value&0x8000 != 0
+	m.zero = value == 0
+}
+
 func (m *Machine) pushWord(value int) {
 	m.sp -= 2
-	m.writeTarget(int(m.sp), value)
+	m.writeTarget(m.sp, value)
 }
 
 func (m *Machine) popWord() int {
-	word := m.ReadWord(int(m.sp))
+	word := m.memory.GetWord(m.sp)
 	m.sp += 2
-	return word
+	return int(word)
 }
 
-func (m *Machine) pushUint16(addr uint16) {
+func (m *Machine) pushUint16(w uint16) {
 	m.sp -= 2
-	m.writeUint16(m.sp, addr)
+	m.memory.PutWord(m.sp, w)
 }
 
 func (m *Machine) popUint16() uint16 {
-	val := m.readUint16(m.sp)
+	val := m.memory.GetWord(m.sp)
 	m.sp += 2
 	return val
 }
 
-func (m *Machine) fetchOperand(mode AddressMode, pc int) (address, value, bytes int) {
+func (m *Machine) fetchOperand(mode AddressMode, pc uint16) (address uint16, value int, bytes uint16) {
 	switch mode {
 	case Implied:
 		// nothing to do
 	case Immediate:
 		address = pc
-		value = m.ReadWord(pc)
+		value = int(m.memory.GetWord(pc))
 		bytes = 2
 		return
 	case ImmediateByte:
@@ -346,170 +254,66 @@ func (m *Machine) fetchOperand(mode AddressMode, pc int) (address, value, bytes 
 		return
 	case OffsetByte:
 		address = pc
-		value = address - 1 + m.ReadInt8(pc)
+		value = int(address) - 1 + m.ReadInt8(pc)
 		bytes = 1
 		return
 	case Absolute:
-		address = m.ReadWord(pc)
+		address = m.memory.GetWord(pc)
 		bytes = 2
 	case Indirect:
-		address = m.ReadWord(m.ReadWord(pc))
+		address = m.memory.GetWord(m.memory.GetWord((pc)))
 		bytes = 2
 	case Relative:
-		address = m.ReadInt8(pc) + int(m.fp)
+		address = uint16(m.ReadInt8(pc) + int(m.fp))
 		bytes = 1
 	case RelativeIndirect:
-		address = m.ReadWord(m.ReadInt8(pc) + int(m.fp))
+		address = m.memory.GetWord(uint16((m.ReadInt8(pc) + int(m.fp))))
 		bytes = 1
 	default:
 		panic(fmt.Sprintf("illegal address mode: %d", mode))
 	}
 	if m.bytes {
-		value = int(m.memory[address])
+		value = int(m.memory.GetByte(address))
 	} else {
-		value = m.ReadWord(address)
+		value = int(m.memory.GetWord(address))
 	}
 	return
 }
 
-func (m *Machine) Dump(w io.Writer, start int, end int) {
-	ascii := make([]byte, 16)
-	charIndex := 0
-	flush := func() {
-		for charIndex < 16 {
-			ascii[charIndex] = ' '
-			charIndex++
-			fmt.Fprintf(w, "   ")
-		}
-		fmt.Fprintf(w, " |%s|\n", string(ascii))
-		charIndex = 0
-	}
-	for addr := start; addr <= end; addr++ {
-		if addr == start || charIndex == 16 {
-			if addr != start {
-				flush()
-			}
-			fmt.Fprintf(w, "%04x  ", addr)
-		}
-		fmt.Fprintf(w, "%02x ", m.memory[addr])
-		ch := m.memory[addr]
-		if ch >= 32 && ch <= 126 {
-			ascii[charIndex] = ch
-		} else {
-			ascii[charIndex] = '.'
-		}
-		charIndex++
-	}
-	flush()
-}
-
-// List will disassemble n instructions starting at addr, and return the
-// pc location following the last instruction.
-func (m *Machine) List(w io.Writer, addr int, n int) int {
-	for i := 0; i < n; i++ {
-		in := m.memory[addr]
-		op, m1, m2 := DecodeOp(in)
-		bytes := 0
-		var args string
-		if m1 != Implied && m2 != Implied {
-			op1, n := m.formatOperand(m1, addr+1)
-			bytes += n
-			op2, n := m.formatOperand(m2, addr+1+n)
-			bytes += n
-			args = op1 + "," + op2
-		} else if m1 != Implied && m2 == Implied {
-			op1, n := m.formatOperand(m1, addr+1)
-			bytes += n
-			args = op1
-		}
-		fmt.Fprintf(w, "0x%04x  %02x ", addr, in)
-		for j := 0; j < 4; j++ {
-			if j < bytes {
-				fmt.Fprintf(w, "%02x ", m.memory[addr+j+1])
-			} else {
-				fmt.Fprintf(w, "   ")
-			}
-		}
-		fmt.Fprintf(w, "%s %s\n", op, args)
-		addr = addr + 1 + bytes
-	}
-	return addr
-}
-
-func (m *Machine) RunAt(addr int) {
+// RunAt runs code from the given program counter until a HLT is encountered.
+func (m *Machine) RunAt(pc uint16) {
 	m.step = false
-	m.pc = uint16(addr)
+	m.pc = pc
 	m.Run()
 }
 
-func (m *Machine) Step(addr int) int {
+// Step executes a single instruction at the given address, and returns the new PC address.
+func (m *Machine) Step(addr uint16) uint16 {
 	m.step = true
-	m.pc = uint16(addr)
-	m.List(os.Stdout, int(m.pc), 1)
+	m.pc = addr
 	m.Run()
-	m.step = false
-	fmt.Printf("[status pc=%04x sp=%04x fp=%04x n=%d z=%d c=%d b=%d]\n", m.pc, m.sp, m.fp, boolInt(m.negative), boolInt(m.zero),
-		boolInt(m.carry), boolInt(m.bytes))
-	return int(m.pc)
+	return m.pc
 }
 
-func boolInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
+type Flags struct {
+	PC       uint16
+	SP       uint16
+	FP       uint16
+	Negative bool
+	Zero     bool
+	Carry    bool
+	Bytes    bool
 }
 
-func (m *Machine) formatOperand(mode AddressMode, pc int) (op string, bytes int) {
-	switch mode {
-	case Implied:
-		// nothing to do
-	case Immediate:
-		op = fmt.Sprintf("#0x%04x", m.ReadWord(pc))
-		bytes = 2
-	case ImmediateByte:
-		op = fmt.Sprintf("#0x%02x", m.ReadInt8(pc))
-		bytes = 1
-	case OffsetByte:
-		value := m.ReadInt8(pc)
-		op = fmt.Sprintf("0x%04x (%d)", (pc-1)+value, value)
-		bytes = 1
-	case Absolute:
-		op = fmt.Sprintf("0x%04x", m.ReadWord(pc))
-		bytes = 2
-	case Indirect:
-		op = fmt.Sprintf("*0x%04x", m.ReadWord(pc))
-		bytes = 2
-	case Relative:
-		value := m.ReadInt8(pc)
-		op = fmt.Sprintf("fp%+d", value)
-		bytes = 1
-	case RelativeIndirect:
-		value := m.ReadInt8(pc)
-		op = fmt.Sprintf("*fp%+d", value)
-		bytes = 1
-	default:
-		panic(fmt.Sprintf("illegal address mode: %d", mode))
+// Flags returns a snapshot of the current state of the registers and flags.
+func (m *Machine) Flags() Flags {
+	return Flags{
+		PC:       m.pc,
+		SP:       m.sp,
+		FP:       m.fp,
+		Negative: m.negative,
+		Zero:     m.zero,
+		Carry:    m.carry,
+		Bytes:    m.bytes,
 	}
-	return
-}
-
-func (m *Machine) SetTraceIO(b bool) {
-	m.traceIO = b
-}
-
-func (m *Machine) ReadByte(addr uint16) byte {
-	if addr > 0x0f {
-		return m.memory[addr]
-	}
-	high := false
-	if addr%2 != 0 {
-		high = true
-		addr &= 0b1111_1110
-	}
-	word := m.doSpecialReadWord(int(addr))
-	if high {
-		return byte((word >> 8) & 0xff)
-	}
-	return byte(word & 0xff)
 }
