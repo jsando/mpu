@@ -5,6 +5,8 @@ import (
 	"math/rand"
 )
 
+// RNG exposes a random number generator as a Memory unit.
+// Writes are ignored.  Both bytes and words can be read.
 type RNG struct {
 	gen *rand.Rand
 }

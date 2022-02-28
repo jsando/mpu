@@ -6,17 +6,29 @@ import (
 	"github.com/jsando/mpu/asm"
 	"github.com/jsando/mpu/machine"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 )
 
 var inputPath = flag.String("i", "", "Input file")
 var sysmon = flag.Bool("m", false, "Open system monitor")
 var runFlag = flag.Bool("r", false, "assemble and run")
-var traceFlag = flag.Bool("h", false, "trace i/o")
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 func main() {
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	if len(*inputPath) == 0 {
 		flag.PrintDefaults()
 		os.Exit(1)

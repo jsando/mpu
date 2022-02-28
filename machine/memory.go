@@ -1,6 +1,10 @@
 package machine
 
-import "bytes"
+import (
+	"bytes"
+	"fmt"
+	"io"
+)
 
 // Memory defines the basic abstraction of reading/writing words and bytes to
 // random access memory OR to memory-mapped registers.
@@ -64,13 +68,20 @@ func (r *Register) Set(w uint16) {
 // and a raw byte slice.  The memory mapped area must be contiguous, and
 // start at offset zero, and must consist of all word-sized memory.
 type ByteSliceMemory struct {
-	mapped      []Memory // Optional memory-mapped, uh, memory ... indexed by address (incl. addr + 1)
-	mappedCount uint16   // len(mapped), to avoid computing it at GHz/sec
-	raw         []byte   // Raw underlying bytes
+	mapped      []Memory      // Optional memory-mapped, uh, memory ... indexed by address (incl. addr + 1)
+	mappedCount uint16        // len(mapped), to avoid computing it at GHz/sec
+	raw         []byte        // Raw underlying bytes
+	reader      *bytes.Reader // Re-use reader
 }
 
 func (m *ByteSliceMemory) BytesReaderAt(addr uint16) *bytes.Reader {
-	return bytes.NewReader(m.raw[addr:])
+	r := m.reader
+	offset := int64(addr)
+	n, err := r.Seek(offset, io.SeekStart)
+	if n != offset || err != nil {
+		panic(fmt.Sprintf("seek failed: %s", err.Error()))
+	}
+	return r
 }
 
 func (m *ByteSliceMemory) ReadZString(addr uint16) string {
@@ -95,6 +106,7 @@ func NewByteSliceMemory(registers []Memory, raw []byte) *ByteSliceMemory {
 		b.mapped = append(b.mapped, registers[i])
 	}
 	b.mappedCount = uint16(len(b.mapped))
+	b.reader = bytes.NewReader(b.raw)
 	return b
 }
 

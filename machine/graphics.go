@@ -16,6 +16,7 @@ const (
 	SdlDrawLine = 6
 	SdlDrawRect = 7
 	SdlFillRect = 8
+	SdlTicks    = 9
 )
 
 // I feel SO DIRTY having a global var but don't see how to encapsulate this better.
@@ -32,6 +33,7 @@ func RegisterSDLHandlers(m *IODispatcher) {
 	m.RegisterIOHandler(SdlDeviceId|SdlDrawLine, &SdlDrawLineHandler{})
 	m.RegisterIOHandler(SdlDeviceId|SdlDrawRect, &SdlDrawRectHandler{})
 	m.RegisterIOHandler(SdlDeviceId|SdlFillRect, &SdlFillRectHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlTicks, &SdlTicksHandler{})
 }
 
 type SdlInitHandler struct {
@@ -207,5 +209,17 @@ func (c *SdlPresentHandler) Handle(m Memory, addr uint16) uint16 {
 	if c.DelayMS > 0 {
 		sdl.Delay(uint32(c.DelayMS))
 	}
+	return ErrNoErr
+}
+
+type SdlTicksHandler struct {
+	Id    uint16
+	Ticks uint16
+}
+
+func (s *SdlTicksHandler) Handle(m Memory, addr uint16) (errCode uint16) {
+	ticks := sdl.GetTicks() / 1000
+	//fmt.Printf("ticks: %d\n", ticks)
+	m.PutWord(addr+2, uint16(ticks))
 	return ErrNoErr
 }
