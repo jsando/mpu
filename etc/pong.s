@@ -3,8 +3,6 @@
 //-------------------------------------
 
 // TODO
-//   Fix bug where ball stuck in paddle
-//   1 vs 2 player mode
 //   Make y vector depend on where it hits paddle (-n if near top, 0 if middle, n if bottom)
 //   Increase velocity as game progresses
 
