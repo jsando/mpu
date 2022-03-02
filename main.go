@@ -92,7 +92,7 @@ func run(inputs []*os.File, monitor bool) {
 	var bytes []byte
 	var err error
 	if src {
-		linker := compile(inputs)
+		linker, _ := compile(inputs)
 		bytes = linker.Code()
 	} else {
 		// run program
@@ -112,7 +112,7 @@ func run(inputs []*os.File, monitor bool) {
 	}
 }
 
-func compile(inputs []*os.File) *asm.Linker {
+func compile(inputs []*os.File) (*asm.Linker, []string) {
 	parser := asm.NewParser(newTokenReader(inputs))
 	parser.Parse()
 	parser.PrintErrors()
@@ -126,12 +126,12 @@ func compile(inputs []*os.File) *asm.Linker {
 	if linker.HasErrors() {
 		os.Exit(1)
 	}
-	return linker
+	return linker, parser.Files()
 }
 
 func build(inputs []*os.File, outputName string) {
-	linker := compile(inputs)
-	asm.WriteListing(inputs, linker)
+	linker, files := compile(inputs)
+	asm.WriteListing(files, linker)
 	code := linker.Code()
 	err := ioutil.WriteFile(outputName, code, 0644)
 	if err != nil {
@@ -141,10 +141,10 @@ func build(inputs []*os.File, outputName string) {
 	}
 }
 
-func newTokenReader(inputs []*os.File) asm.TokenReader {
+func newTokenReader(inputs []*os.File) *asm.Input {
 	var tr []asm.TokenReader
 	for _, file := range inputs {
 		tr = append(tr, asm.NewLexer(file.Name(), file))
 	}
-	return asm.NewInputs(tr)
+	return asm.NewInput(tr)
 }

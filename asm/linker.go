@@ -101,6 +101,9 @@ func (l *Linker) defineLabels(frag *Statement) {
 	// todo check we aren't redefining symbols
 	global := false
 	for _, label := range frag.labels {
+		if l.isErrorDefined(frag, label) {
+			return
+		}
 		l.symbols.AddSymbol(frag.file, frag.line, label)
 		l.symbols.Define(label, l.pc)
 		if !strings.ContainsAny(label, ".") {
@@ -152,6 +155,9 @@ func (l *Linker) writeWordAt(val int, pc int) {
 func (l *Linker) doEquate(frag *Statement) {
 	if len(frag.labels) != 1 {
 		l.errorf(frag, "equate must have exactly one label")
+	}
+	if l.isErrorDefined(frag, frag.labels[0]) {
+		return
 	}
 	l.symbols.AddSymbol(frag.file, frag.line, frag.labels[0])
 	ival, _, res := frag.operands[0].expr.computeValue(l.symbols) // todo equate must have 1 arg
@@ -413,6 +419,15 @@ func (l *Linker) overrideFramePointerSymbols(frag *Statement) {
 			}
 		}
 	}
+}
+
+func (l *Linker) isErrorDefined(stmt *Statement, id string) bool {
+	s := l.symbols.GetSymbol(id)
+	if s != nil {
+		l.errorf(stmt, "attempt to redefine '%s', already defined by %s:%d", s.text, s.file, s.line)
+		return true
+	}
+	return false
 }
 
 func tokToOp(tok TokenType) machine.OpCode {

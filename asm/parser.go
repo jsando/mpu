@@ -3,12 +3,14 @@ package asm
 import (
 	"fmt"
 	"github.com/jsando/mpu/machine"
+	"os"
+	"path/filepath"
 	"strconv"
 )
 
 type Parser struct {
 	messages      *Messages
-	lexer         TokenReader
+	lexer         *Input
 	pc            int
 	first         *Statement
 	last          *Statement
@@ -16,7 +18,7 @@ type Parser struct {
 	pendingLabels []string // labels to be assigned to the next fragment
 }
 
-func NewParser(lex TokenReader) *Parser {
+func NewParser(lex *Input) *Parser {
 	return &Parser{
 		messages: &Messages{},
 		lexer:    lex,
@@ -65,16 +67,48 @@ loop:
 			if tok == TokIdent {
 				p.parseLabel()
 			} else {
-				fragment := p.newFragment(tok)
-				p.lexer.Next()
-				operands := p.parseOperands()
-				fragment.operands = operands
+				if tok == TokImports {
+					p.parseImports()
+				} else {
+					fragment := p.newFragment(tok)
+					p.lexer.Next()
+					operands := p.parseOperands()
+					fragment.operands = operands
+				}
 			}
 		default:
 			p.errorf("unexpected: %s", p.lexer.Token())
 			break loop
 		}
 	}
+}
+
+// Files returns the list of all files processed.
+func (p *Parser) Files() []string {
+	return p.lexer.Files()
+}
+
+func (p *Parser) parseImports() {
+	tok := p.lexer.Next()
+	if tok != TokString {
+		p.errorf("imports requires string as argument")
+		return
+	}
+	name, err := strconv.Unquote(p.lexer.TokenText())
+	if err != nil {
+		p.errorf("bad import name '%s'", p.lexer.TokenText())
+		return
+	}
+	dir := filepath.Dir(p.lexer.FileName())
+	name = filepath.Join(dir, name) + ".s"
+	file, err := os.Open(name)
+	if err != nil {
+		p.errorf("error opening file '%s': %s\n", name, err.Error())
+		return
+	}
+	r := NewLexer(file.Name(), file)
+	p.lexer.Append(r)
+	p.lexer.Next()
 }
 
 func (p *Parser) parseLabel() {

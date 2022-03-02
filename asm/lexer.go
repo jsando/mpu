@@ -68,6 +68,7 @@ const (
 	TokRst
 	TokHlt
 	TokFunction
+	TokImports
 	TokEOL
 )
 
@@ -85,7 +86,7 @@ var tokenImage = []string{
 	"jlt", "inc", "dec", "jsr", "ret",
 	"clc", "sec", "clb", "seb", "jcc",
 	"jcs", "sav", "rst", "hlt", "function()",
-	"<eol>",
+	"imports", "<eol>",
 }
 
 func (t TokenType) String() string {
@@ -101,33 +102,51 @@ type TokenReader interface {
 	TokenText() string
 }
 
-// Inputs implements TokenReader but delegates to a list of
+// Input implements TokenReader but delegates to a list of
 // underlying TokenReaders, reading each in order until EOF
 // and then moving to the next.  Copied from Go's asm/lexer/stack
 // except this one is in order rather than stack based.  Need it
 // in order because the first source file will establish the org,
 // all others must be libraries with relocatable code.
-type Inputs struct {
-	tr []TokenReader
+type Input struct {
+	tr      []TokenReader
+	imports map[string]bool
+	files   []string // file names, in the order they were processed
 }
 
-func NewInputs(readers []TokenReader) *Inputs {
-	return &Inputs{tr: readers}
+func NewInput(readers []TokenReader) *Input {
+	inp := &Input{imports: make(map[string]bool)}
+	for _, r := range readers {
+		inp.Append(r)
+	}
+	return inp
 }
 
-func (i *Inputs) FileName() string {
+func (i *Input) Append(r TokenReader) {
+	if !i.imports[r.FileName()] {
+		i.tr = append(i.tr, r)
+		i.imports[r.FileName()] = true
+		i.files = append(i.files, r.FileName())
+	}
+}
+
+func (i *Input) Files() []string {
+	return i.files
+}
+
+func (i *Input) FileName() string {
 	return i.tr[0].FileName()
 }
 
-func (i *Inputs) Line() int {
+func (i *Input) Line() int {
 	return i.tr[0].Line()
 }
 
-func (i *Inputs) Column() int {
+func (i *Input) Column() int {
 	return i.tr[0].Column()
 }
 
-func (i *Inputs) Next() TokenType {
+func (i *Input) Next() TokenType {
 	tos := i.tr[0]
 	tok := tos.Next()
 	for tok == TokEOF && len(i.tr) > 1 {
@@ -138,11 +157,11 @@ func (i *Inputs) Next() TokenType {
 	return tok
 }
 
-func (i *Inputs) Token() TokenType {
+func (i *Input) Token() TokenType {
 	return i.tr[0].Token()
 }
 
-func (i *Inputs) TokenText() string {
+func (i *Input) TokenText() string {
 	return i.tr[0].TokenText()
 }
 

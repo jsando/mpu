@@ -115,8 +115,6 @@ Is effectively:
 
 - I declared a local with the same name as a global and all hell broke loose with no warning.    Redefining symbols to *different* values is a hard error.  To modularize, it has to be possible to redefine them to the same values ... OR I need #ifndef directives.
 - Defining a local with the same name as a global should be a warning
-- Add include directive so I can start stop copy-pasting the same shit everywhere
-    - Model after Go's input/stack/tokenizer ... maybe even add macros later on
 - Really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
     - Suppose I could add a 1 byte (uint8) to relative-indirect, if none specified its zero?  My lovely byte savings go away :(
     - Tried it on some sample code and it cleans it up a lot
