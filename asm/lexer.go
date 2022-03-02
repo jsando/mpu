@@ -92,6 +92,54 @@ func (t TokenType) String() string {
 	return tokenImage[t]
 }
 
+type TokenReader interface {
+	FileName() string
+	Line() int
+	Column() int
+	Next() TokenType
+	Token() TokenType
+	TokenText() string
+}
+
+func NewInputs(readers []TokenReader) *Inputs {
+	return &Inputs{tr: readers}
+}
+
+type Inputs struct {
+	tr []TokenReader
+}
+
+func (i *Inputs) FileName() string {
+	return i.tr[len(i.tr)-1].FileName()
+}
+
+func (i *Inputs) Line() int {
+	return i.tr[len(i.tr)-1].Line()
+}
+
+func (i *Inputs) Column() int {
+	return i.tr[len(i.tr)-1].Column()
+}
+
+func (i *Inputs) Next() TokenType {
+	tos := i.tr[len(i.tr)-1]
+	tok := tos.Next()
+	for tok == TokEOF && len(i.tr) > 1 {
+		// close, if i had that in my interface :)
+		i.tr = i.tr[:len(i.tr)-1]
+		tok = i.Next()
+	}
+	return tok
+}
+
+func (i *Inputs) Token() TokenType {
+	return i.tr[len(i.tr)-1].Token()
+}
+
+func (i *Inputs) TokenText() string {
+	return i.tr[len(i.tr)-1].TokenText()
+}
+
 type Lexer struct {
 	s    *scanner.Scanner
 	line int
@@ -199,29 +247,10 @@ func (l *Lexer) Next() TokenType {
 	return l.tok
 }
 
-func (l *Lexer) syncNextStmt() TokenType {
-	for l.tok == TokEOL {
-		l.Next()
-	}
+func (l *Lexer) Token() TokenType {
 	return l.tok
-}
-
-// skipToEOL skips all tokens up to the next EOL, useful in error recovery.
-func (l *Lexer) skipToEOL() {
-	for l.tok != TokEOL && l.tok != TokEOF {
-		l.Next()
-	}
 }
 
 func (l *Lexer) TokenText() string {
 	return l.s.TokenText()
-}
-
-func toKeyword(ident string) TokenType {
-	for i, image := range tokenImage {
-		if ident == image {
-			return TokenType(i)
-		}
-	}
-	return TokIdent
 }

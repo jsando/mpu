@@ -8,7 +8,7 @@ import (
 
 type Parser struct {
 	messages      *Messages
-	lexer         *Lexer
+	lexer         TokenReader
 	pc            int
 	first         *Statement
 	last          *Statement
@@ -16,11 +16,35 @@ type Parser struct {
 	pendingLabels []string // labels to be assigned to the next fragment
 }
 
-func NewParser(lex *Lexer) *Parser {
+func NewParser(lex TokenReader) *Parser {
 	return &Parser{
 		messages: &Messages{},
 		lexer:    lex,
 	}
+}
+
+func (p *Parser) syncNextStmt() TokenType {
+	for p.lexer.Token() == TokEOL {
+		p.lexer.Next()
+	}
+	return p.lexer.Token()
+}
+
+// skipToEOL skips all tokens up to the next EOL, useful in error recovery.
+func (p *Parser) skipToEOL() {
+	l := p.lexer
+	for l.Token() != TokEOL && l.Token() != TokEOF {
+		l.Next()
+	}
+}
+
+func toKeyword(ident string) TokenType {
+	for i, image := range tokenImage {
+		if ident == image {
+			return TokenType(i)
+		}
+	}
+	return TokIdent
 }
 
 // Parse the input.
@@ -29,7 +53,7 @@ func (p *Parser) Parse() {
 	tok := lexer.Next()
 loop:
 	for {
-		tok = lexer.syncNextStmt()
+		tok = p.syncNextStmt()
 		switch tok {
 		case TokEOF:
 			break loop
@@ -47,7 +71,7 @@ loop:
 				fragment.operands = operands
 			}
 		default:
-			p.errorf("unexpected: %s", p.lexer.tok)
+			p.errorf("unexpected: %s", p.lexer.Token())
 			break loop
 		}
 	}
@@ -75,17 +99,17 @@ func (p *Parser) parseFunctionDecl(fnName string) {
 	p.defineLabel(fnName)
 	p.lexer.Next()
 	frag := p.newFragment(TokFunction)
-	for p.lexer.tok != TokRightParen {
-		if p.lexer.tok != TokIdent {
-			p.errorf("expected: identifier, got: %s", p.lexer.tok)
-			p.lexer.skipToEOL()
+	for p.lexer.Token() != TokRightParen {
+		if p.lexer.Token() != TokIdent {
+			p.errorf("expected: identifier, got: %s", p.lexer.Token())
+			p.skipToEOL()
 			return
 		}
 		id := fnName + "." + p.lexer.TokenText()
 		tok := p.lexer.Next()
 		if tok != TokIdent {
-			p.errorf("expected: identifier, got: %s", p.lexer.tok)
-			p.lexer.skipToEOL()
+			p.errorf("expected: identifier, got: %s", p.lexer.Token())
+			p.skipToEOL()
 			return
 		}
 		var size int
@@ -96,7 +120,7 @@ func (p *Parser) parseFunctionDecl(fnName string) {
 			size = 1
 		} else {
 			p.errorf("expected 'word' or 'byte', got: %s", sizeText)
-			p.lexer.skipToEOL()
+			p.skipToEOL()
 			return
 		}
 		// ok we have id, size ... wtf do we do now
@@ -118,19 +142,19 @@ func (p *Parser) parseLocalLabel() {
 	tok := p.lexer.Next()
 	if tok != TokIdent {
 		p.errorf("expected identifier, got: %s", tok)
-		p.lexer.skipToEOL()
+		p.skipToEOL()
 		return
 	}
 	tokenText := p.lexer.TokenText()
 	p.lexer.Next()
 
 	// If followed by '=', its a local equate
-	if p.lexer.tok == TokEquals {
+	if p.lexer.Token() == TokEquals {
 		p.lexer.Next()
 		fragment := p.newEquate(p.label + "." + tokenText)
 		operands := p.parseOperands()
 		fragment.operands = operands
-	} else if p.lexer.tok == TokIdent && p.lexer.TokenText() == "local" {
+	} else if p.lexer.Token() == TokIdent && p.lexer.TokenText() == "local" {
 		// if followed by 'local' it's a local decl ie fp relative
 		if p.last.operation != TokFunction {
 			p.errorf("'local' can only be used immediately after function declaration")
@@ -138,8 +162,8 @@ func (p *Parser) parseLocalLabel() {
 		}
 		tok = p.lexer.Next()
 		if tok != TokIdent {
-			p.errorf("expected: identifier, got: %s", p.lexer.tok)
-			p.lexer.skipToEOL()
+			p.errorf("expected: identifier, got: %s", p.lexer.Token())
+			p.skipToEOL()
 			return
 		}
 		id := p.label + "." + tokenText
@@ -151,7 +175,7 @@ func (p *Parser) parseLocalLabel() {
 			size = 1
 		} else {
 			p.errorf("expected 'word' or 'byte', got: %s", sizeText)
-			p.lexer.skipToEOL()
+			p.skipToEOL()
 			return
 		}
 		// ok we have id, size ... wtf do we do now
@@ -168,7 +192,7 @@ func (p *Parser) parseLocalLabel() {
 func (p *Parser) newFragment(operation TokenType) *Statement {
 	fragment := &Statement{
 		file:      p.lexer.FileName(),
-		line:      p.lexer.line,
+		line:      p.lexer.Line(),
 		labels:    p.pendingLabels,
 		operation: operation,
 	}
@@ -188,7 +212,7 @@ func (p *Parser) newFragment(operation TokenType) *Statement {
 func (p *Parser) newEquate(id string) *Statement {
 	fragment := &Statement{
 		file:      p.lexer.FileName(),
-		line:      p.lexer.line,
+		line:      p.lexer.Line(),
 		labels:    []string{id},
 		operation: TokEquals,
 	}
@@ -237,7 +261,7 @@ func (p *Parser) parseOperands() []*Operand {
 			return operands
 		}
 		operands = append(operands, operand)
-		if p.lexer.tok != TokComma {
+		if p.lexer.Token() != TokComma {
 			break
 		}
 		p.lexer.Next()
@@ -246,7 +270,7 @@ func (p *Parser) parseOperands() []*Operand {
 }
 
 func (p *Parser) parseOperand() *Operand {
-	tok := p.lexer.tok
+	tok := p.lexer.Token()
 	if tok == TokEOL {
 		return nil
 	}
@@ -301,8 +325,8 @@ func (p *Parser) parseOperand() *Operand {
 func (p *Parser) parseExpr() Expr {
 	// MulExpr [ ('+' | '-' | '|' | '^') MulExpr]*
 	expr := p.parseMulExpr()
-	for isAddOp(p.lexer.tok) {
-		op := p.lexer.tok
+	for isAddOp(p.lexer.Token()) {
+		op := p.lexer.Token()
 		p.lexer.Next()
 		expr2 := p.parseMulExpr()
 		binop := ExprBinary{
@@ -318,8 +342,8 @@ func (p *Parser) parseExpr() Expr {
 func (p *Parser) parseMulExpr() Expr {
 	// UnaryExpr ['*' | '/' | '%' | '<<' | '>>'  UnaryExpr]*
 	expr := p.parseUnaryExpr()
-	for isMulOp(p.lexer.tok) {
-		op := p.lexer.tok
+	for isMulOp(p.lexer.Token()) {
+		op := p.lexer.Token()
 		p.lexer.Next()
 		expr2 := p.parseUnaryExpr()
 		binop := ExprBinary{
@@ -334,8 +358,8 @@ func (p *Parser) parseMulExpr() Expr {
 
 func (p *Parser) parseUnaryExpr() Expr {
 	// ['+' | '-'] PrimaryExpr
-	if isUnaryOp(p.lexer.tok) {
-		op := p.lexer.tok
+	if isUnaryOp(p.lexer.Token()) {
+		op := p.lexer.Token()
 		p.lexer.Next()
 		expr1 := p.parsePrimaryExpr()
 		expr := ExprUnary{
@@ -354,7 +378,7 @@ func (p *Parser) parseUnaryExpr() Expr {
 //    | Literal (int, String, Char)
 func (p *Parser) parsePrimaryExpr() Expr {
 	var expr Expr
-	switch p.lexer.tok {
+	switch p.lexer.Token() {
 	case TokLeftParen:
 		p.lexer.Next()
 		expr = p.parseExpr()
@@ -382,7 +406,7 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		expr = IntLiteral{value: int(p.lexer.TokenText()[1])}
 	default:
 		// some kind of error
-		p.errorf("expected (expr), identifier, or literal (got %s)", p.lexer.tok)
+		p.errorf("expected (expr), identifier, or literal (got %s)", p.lexer.Token())
 		expr = IntLiteral{value: 0}
 		// todo skip to eol?
 	}
@@ -391,7 +415,7 @@ func (p *Parser) parsePrimaryExpr() Expr {
 }
 
 func (p *Parser) expect(tokenType TokenType) {
-	if p.lexer.tok != tokenType {
+	if p.lexer.Token() != tokenType {
 		p.errorf("expected: %s, got: %s", tokenType, p.lexer.TokenText())
 	}
 }
