@@ -131,8 +131,7 @@ func compile(inputs []*os.File) *asm.Linker {
 
 func build(inputs []*os.File, outputName string) {
 	linker := compile(inputs)
-	// todo how to list when multiple input files???
-	//asm.WriteListing(file, os.Stdout, linker)
+	asm.WriteListing(inputs, linker)
 	code := linker.Code()
 	err := ioutil.WriteFile(outputName, code, 0644)
 	if err != nil {

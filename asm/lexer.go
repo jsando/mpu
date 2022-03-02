@@ -101,43 +101,49 @@ type TokenReader interface {
 	TokenText() string
 }
 
-func NewInputs(readers []TokenReader) *Inputs {
-	return &Inputs{tr: readers}
-}
-
+// Inputs implements TokenReader but delegates to a list of
+// underlying TokenReaders, reading each in order until EOF
+// and then moving to the next.  Copied from Go's asm/lexer/stack
+// except this one is in order rather than stack based.  Need it
+// in order because the first source file will establish the org,
+// all others must be libraries with relocatable code.
 type Inputs struct {
 	tr []TokenReader
 }
 
+func NewInputs(readers []TokenReader) *Inputs {
+	return &Inputs{tr: readers}
+}
+
 func (i *Inputs) FileName() string {
-	return i.tr[len(i.tr)-1].FileName()
+	return i.tr[0].FileName()
 }
 
 func (i *Inputs) Line() int {
-	return i.tr[len(i.tr)-1].Line()
+	return i.tr[0].Line()
 }
 
 func (i *Inputs) Column() int {
-	return i.tr[len(i.tr)-1].Column()
+	return i.tr[0].Column()
 }
 
 func (i *Inputs) Next() TokenType {
-	tos := i.tr[len(i.tr)-1]
+	tos := i.tr[0]
 	tok := tos.Next()
 	for tok == TokEOF && len(i.tr) > 1 {
 		// close, if i had that in my interface :)
-		i.tr = i.tr[:len(i.tr)-1]
+		i.tr = i.tr[1:]
 		tok = i.Next()
 	}
 	return tok
 }
 
 func (i *Inputs) Token() TokenType {
-	return i.tr[len(i.tr)-1].Token()
+	return i.tr[0].Token()
 }
 
 func (i *Inputs) TokenText() string {
-	return i.tr[len(i.tr)-1].TokenText()
+	return i.tr[0].TokenText()
 }
 
 type Lexer struct {
