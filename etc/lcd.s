@@ -1,6 +1,11 @@
 //
 // A 16-segment lcd font from https://github.com/dmadison/LED-Segment-ASCII
 //
+//  To use, define the following to specify the font size in pixels (examples):
+//          LCD_CHAR_WIDTH  = 32 // width in pixels of 1 character
+//          LCD_CHAR_SPACE  = 36 // spacing from one char to the next
+//          LCD_LINE_SPACE  = 70 // spacing from one line to the next
+//
 //     Illustration here from https://github.com/MartyMacGyver/LCD_HT1622_16SegLcd
 //
 //    /-----------\   /-----------\
@@ -47,7 +52,7 @@ DrawString(pstring word):
             cmp ch, #10         // linefeed
             jne validate
             cpy tx, #0
-            add ty, #LINE_SPACE
+            add ty, #LCD_LINE_SPACE
             jmp next
 .validate
             cmp ch, #32
@@ -105,7 +110,7 @@ DrawCharacter(char word):
             div mask, #2        // shift right
             jne loop            // if result is zero there's nothing more to draw
 
-            add tx, #CHAR_SPACE
+            add tx, #LCD_CHAR_SPACE
             ret
 
 .line       dw 0x0206
@@ -114,11 +119,8 @@ DrawCharacter(char word):
 .line_x2    dw 0
 .line_y2    dw 0
 
-CHAR_SPACE  = 36
-LINE_SPACE  = 70
-
 CharacterSegmentTable:
-    .cw          = 32
+    .cw          = LCD_CHAR_WIDTH
     .x1          = 0
     .x2          = cw / 2
     .x3          = cw - 1

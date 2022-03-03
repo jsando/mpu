@@ -1,5 +1,5 @@
-        imports "stdio"
-        imports "strconv"
+        import "stdio"
+        import "strconv"
 
 // requires: strconv, stdio
 //---------------------------------------------------------

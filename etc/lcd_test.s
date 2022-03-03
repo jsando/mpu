@@ -1,8 +1,13 @@
 
-            imports "lcd"
+            import "lcd"
 
 // Test driver for lcd
             dw main
+
+// Define font size, these are referenced from lcd.s
+LCD_CHAR_WIDTH  = 16
+LCD_CHAR_SPACE  = 20
+LCD_LINE_SPACE  = 40
 
 // Constants
 REG_IO_REQ      = 6

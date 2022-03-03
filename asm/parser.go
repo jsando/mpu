@@ -67,7 +67,7 @@ loop:
 			if tok == TokIdent {
 				p.parseLabel()
 			} else {
-				if tok == TokImports {
+				if tok == TokImport {
 					p.parseImports()
 				} else {
 					fragment := p.newFragment(tok)

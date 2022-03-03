@@ -6,6 +6,10 @@
 //   Make y vector depend on where it hits paddle (-n if near top, 0 if middle, n if bottom)
 //   Increase velocity as game progresses
 
+            import "random"
+            import "lcd"
+            import "strconv"
+
 // The initial program counter needs to point to the entry point at startup.
 // The rest of the special mem area ($00-$0f) can be left zero on startup.
             org 0
@@ -18,6 +22,10 @@ REG_RAND:   dw 0
 
             org 0x10
 // Constants
+LCD_CHAR_WIDTH  = 20
+LCD_CHAR_SPACE  = 24
+LCD_LINE_SPACE  = 48
+
 SCREEN_WIDTH    = 640
 SCREEN_HEIGHT   = 400
 BALL_RADIUS     = 20
@@ -242,7 +250,7 @@ DrawScreen():
             jsr DrawString
             pop #2
             cpy tx, #40
-            cpy ty, #80+LINE_SPACE
+            cpy ty, #80+LCD_LINE_SPACE
             psh #press_space_msg
             jsr DrawString
             pop #2
@@ -592,20 +600,6 @@ Overlap(overlap word, x1 word, y1 word, w1 word, h1 word, x2 word, y2 word, w2 w
             jlt done
             cpy overlap, #1     // If its not all of the above, its overlapping
 .done
-            ret
-
-// Generate a random number in the range (0, range]
-//
-Random(result word, range word):
-    .i local word
-    .j local word
-            cpy i, 10           // get a random number in range 0-65535
-            cpy j, i            // value / range * range
-            div j, range
-            mul j, range
-            cpy result, i
-            sec
-            sub result, j
             ret
 
 //
