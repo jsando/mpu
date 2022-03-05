@@ -46,10 +46,10 @@ CELL_SIZE       = BOARD_HEIGHT /25
 BOARD_X         = (SCREEN_WIDTH / 2 - 6 * CELL_SIZE)
 BOARD_Y         = PADDING
 BOARD_WIDTH     = 12 * CELL_SIZE
-NEXT_X          = BOARD_X + BOARD_WIDTH + 3 * CELL_SIZE
-NEXT_Y1         = PADDING
-NEXT_Y2         = NEXT_Y1 + 6 * CELL_SIZE
-NEXT_Y3         = NEXT_Y2 + 6 * CELL_SIZE
+NEXT_X          = BOARD_X + BOARD_WIDTH
+NEXT_Y1         = PADDING + CELL_SIZE
+NEXT_Y2         = NEXT_Y1 + 4 * CELL_SIZE
+NEXT_Y3         = NEXT_Y2 + 4 * CELL_SIZE
 
 // Globals
 QuitFlag:       dw 0
@@ -113,14 +113,17 @@ Score:          dw 0
 Lines:          dw 0
 Level:          dw 1
 
-Piece:          dw 255
-PieceX:         dw 0
-PieceY:         dw 0
-Rotation:       dw 0
+Piece:          dw 255          // Current piece number 0-6, 255 = game over
+PieceX:         dw 0            // Current piece board position 1-10 (0 and 11 are borders) * 256 (8.8 fixed point)
+PieceY:         dw 0            // Current piece board position 0-23 (25 is border) * 256 (8.8 fixed point)
+PieceDX:        dw 0            // Current piece delta to actual position
+Rotation:       dw 0            // Current piece rotation 0-3
 
 NextPiece1:     dw 0
 NextPiece2:     dw 0
 NextPiece3:     dw 0
+
+SpaceWait:      dw 0
 
 // Game board ... 12x24 color # of each cell, but left/bottom/right are solid and not drawn
 GameBoard:      ds 12*25*2
@@ -441,12 +444,12 @@ ResetBoard:
             dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,1,0,0,0,0,0,0,1
-            dw 1,0,0,0,2,0,0,0,0,0,0,1
-            dw 1,0,0,0,3,0,0,0,0,0,0,1
-            dw 1,0,0,0,4,0,0,0,0,0,0,1
-            dw 1,0,0,0,5,0,0,0,0,0,0,1
-            dw 1,0,0,0,6,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,0,0,0,0,0,0,0,0,0,0,1
@@ -521,7 +524,10 @@ CreatePiece():
             pop NextPiece3
 
             cpy Rotation, #0
-            // px, dx, py, fall_delay, start_time
+            cpy PieceX, #(4*256)
+            cpy PieceY, #(2*256)
+            cpy PieceDX, PieceX
+
             psh #0
             jsr IsValid
             pop valid
@@ -540,11 +546,9 @@ IsValid(valid word):
             .ptr local word
 
             cpy bx, PieceX
-            sub bx, #BOARD_X
-            div bx, #CELL_SIZE
+            div bx, #256
             cpy by, PieceY
-            sub by, #BOARD_Y
-            div by, #CELL_SIZE
+            div by, #256
 
             // Lookup block mask
             cpy ptr, Piece
@@ -596,7 +600,216 @@ IsValid(valid word):
             ret
 
 UpdateGame():
+            .t1 local word
+            .oldx local word
+            .oldy local word
+            .oldr local word
+
+            cpy oldx, PieceX
+            cpy oldy, PieceY
+            cpy oldr, Rotation
+
+            cmp KeyJDown, #1
+            jne checkRight
+            cmp PieceX, #33
+            jlt checkRight
+            sub PieceX, #32
+.checkRight
+            cmp KeyLDown, #1
+            jne bumpY
+            add PieceX, #32
+.bumpY
+            cpy t1, Level
+            mul t1, #3
+            add t1, #2
+            add PieceY, t1
+
+            cmp KeyKDown, #1
+            jne checkSpace
+            add PieceY, #54
+.checkSpace            
+            cmp KeySpaceDown, #0
+            jne rotate
+            cpy SpaceWait, #0
+            jmp checkValid
+.rotate
+            cmp SpaceWait, #0
+            jne checkValid
+            cpy SpaceWait, #1
+            inc Rotation
+            cmp Rotation, #4
+            jlt checkValid
+            cpy Rotation, #0
+.checkValid 
+            psh #0
+            jsr IsValid
+            pop t1
+            jne done
+
+            // current state isn't valid, reset to last state
+            cmp PieceX, oldx
+            jne invalid2
+            cmp Rotation, oldr
+            jne invalid2
+            cmp PieceY, oldy
+            jeq invalid2
+            cpy PieceY, oldy
+            jsr StampyTown
+            jsr CollapseRows
+            jmp done
+.invalid2
+            cmp PieceX, oldx
+            jeq else
+            cmp Rotation, oldr
+            jeq else
+            cpy PieceX, oldx
+            jmp checkValid
+.else
+            cmp Rotation, oldr
+            jeq movingOn
+            // todo: play sound then fall through
+.movingOn
+            cpy PieceX, oldx
+            cpy Rotation, oldr
+            cmp PieceY, oldy
+            jne checkValid
+.done            
             ret
+
+StampyTown():
+            .i local word
+            .mask local word
+            .bx local word
+            .by local word
+            .block local word
+            .t1 local word
+            .ptr local word
+
+            cpy bx, PieceX
+            div bx, #256
+            cpy by, PieceY
+            div by, #256
+
+            // Lookup block mask
+            cpy ptr, Piece
+            mul ptr, #8
+            cpy t1, Rotation
+            mul t1, #2
+            add ptr, t1
+            add ptr, #BlockTable
+            cpy block, *ptr
+
+            cpy i, #1
+            cpy mask, #1
+.loop           
+            cpy t1, block
+            and t1, mask
+            jeq row
+
+            // Mark game board
+            cpy ptr, by
+            mul ptr, #24
+            cpy t1, bx
+            mul t1, #2
+            add ptr, t1
+            add ptr, #GameBoard
+            cpy *ptr, Piece
+            inc *ptr
+.row
+            cmp i, #4
+            jeq horiz
+            cmp i, #8
+            jeq horiz
+            cmp i, #12
+            jne vert
+.horiz
+            sub bx, #3
+            inc by
+            jmp endloop
+.vert
+            inc bx
+.endloop
+            mul mask, #2
+            inc i
+            cmp i, #14
+            jlt loop
+            cpy Piece, #255
+            // todo bonus time
+            ret
+
+CollapseRows():
+.by         local word
+.total_line local word
+.i          local word
+.j          local word
+.ptr        local word
+.t1         local word
+
+            cpy total_line, #0
+            cpy by, PieceY
+            div by, #256
+            cpy j, #0
+.loop           
+            add by, j
+            cmp by, #24
+            jeq updateScore
+
+            // count how many in a row are occupied
+            cpy ptr, by
+            mul ptr, #24        // 12 across times 2 bytes/cell
+            add ptr, #GameBoard
+            add ptr, #2         // skip left column
+            cpy i, #10
+.countLoop  
+            cmp *ptr, #0
+            jeq nextRow
+            add ptr, #2          
+            dec i
+            jne countLoop
+
+            inc total_line      // all 10 were lit up, collapse this row
+            cpy ptr, by
+            mul ptr, #24        // 12 across times 2 bytes/cell
+            add ptr, #GameBoard
+            add ptr, #2         // skip left column
+            cpy t1, by
+            dec t1
+            mul t1, #24        
+            add t1, #GameBoard
+            add t1, #2         
+.collapseLoop
+            cpy i, #10
+.copyRow
+            cpy *ptr, *t1
+            add ptr, #2
+            add t1, #2
+            dec i
+            jne copyRow
+            sub ptr, #20+24
+            sub t1, #20+24
+            dec by
+            cmp by, #2
+            jge collapseLoop
+.nextRow
+            inc j
+            cmp j, #4
+            jlt loop
+.updateScore
+            cpy ptr, total_line
+            mul ptr, #2
+            add ptr, #LineScoreTable
+            add Score, *ptr
+            add Lines, total_line
+            cpy t1, Level
+            mul t1, #15
+            cmp Lines, t1
+            jlt done
+            inc Level
+.done            
+            ret
+
+LineScoreTable:
+            dw 0, 100, 200, 500, 2000
 
 // BlockTable defines the block shapes using bitmasks.
 // Each row defines one block, with masks for rotation=0,1,2,3
@@ -671,6 +884,8 @@ DrawPiece(x word, y word, piece word, rotation word):
 
 // Draw the current and next pieces on the screen.
 DrawPieces():
+            .t1 local word
+
             // next 1
             psh #NEXT_X
             psh #NEXT_Y1
@@ -692,6 +907,37 @@ DrawPieces():
             psh #NEXT_Y3
             psh NextPiece3
             psh #0
+            jsr DrawPiece
+            pop #8
+
+            // if dx > (px / 256 * 256) then dx = dx - 32
+            cpy t1, PieceX
+            div t1, #256
+            mul t1, #256
+            cmp t1, PieceDX
+            jge incdx
+            sub PieceDX, #32
+.incdx            
+            // if dx < (px / 256 * 256) then dx = dx + 32
+            cmp PieceDX, t1
+            jge draw1
+            add PieceDX, #32
+.draw1
+            // x = dx * CELL_SIZE / 256 + BOARD_LEFT
+            // y = py * CELL_SIZE / 256 + BOARD_TOP - CELL_SIZE - 1
+            cpy t1, PieceDX
+            mul t1, #CELL_SIZE
+            div t1, #256
+            add t1, #BOARD_X
+            psh t1
+            cpy t1, PieceY
+            mul t1, #CELL_SIZE
+            div t1, #256
+            add t1, #BOARD_Y
+            sub t1, #CELL_SIZE - 1
+            psh t1
+            psh Piece
+            psh Rotation
             jsr DrawPiece
             pop #8
 
