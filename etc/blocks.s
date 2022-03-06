@@ -1,16 +1,3 @@
-/*
-    game board is a 12x25 grid
-    pieces are on a 4x4 grid
-    window is 800x600
-
-    let's say window height = wh, leaving some margin at top and bottom and room
-    for a border around the game board.
-
-    cellSize = (window_height - padding) / 25
-    board_x = (window_width / 2) - 6 * cellSize
-    board_y = top padding
-
-*/
             import "random"
             import "lcd"
             import "stdio"
@@ -20,7 +7,7 @@
             dw Main
 
             org 0x10
-REG_IO_REQ  = 6
+IO_REQUEST  = 6
 
             org 0x10
 // Constants
@@ -73,7 +60,7 @@ KeyKDown:       dw 0
 KeyLDown:       dw 0
                 dw 0    // end of list
 
-// Common color commands ... copy these addresses to REG_IO_REQ to set color
+// Common color commands ... copy these addresses to IO_REQUEST to set color
 ColorBlack:     dw 0x0205
                 db 0,0,0,255
 ColorBlue:      dw 0x0205
@@ -101,6 +88,9 @@ ColorBG:        dw 0x0205
 ColorScoreFG:   dw 0x0205
                 db 0,255,0,255
 
+// Table of block colors, indexed by piece # + 1.  These are pointers
+// to the IO commands to copy to IO_REQUEST to set that as the current
+// color.
 BlockColors:    dw ColorBlack
                 dw ColorBlue
                 dw ColorGreen
@@ -115,9 +105,9 @@ Lines:          dw 0
 Level:          dw 1
 
 Piece:          dw 255          // Current piece number 0-6, 255 = game over
-PieceX:         dw 0            // Current piece board position 1-10 (0 and 11 are borders) * 256 (8.8 fixed point)
-PieceY:         dw 0            // Current piece board position 0-23 (25 is border) * 256 (8.8 fixed point)
-PieceDX:        dw 0            // Current piece delta to actual position
+PieceX:         dw 0            // Current piece board position 1-10 (0 and 11 are borders) * COORD_SCALE
+PieceY:         dw 0            // Current piece board position 0-23 (25 is border) * COORD_SCALE
+PieceDX:        dw 0            // Current piece delta to actual position (to animate smooth as it moves)
 Rotation:       dw 0            // Current piece rotation 0-3
 
 NextPiece1:     dw 0
@@ -145,6 +135,64 @@ DebugHere:  dw 0x0101           // Quick way to trace execution by printing stuf
             dw buffer
 .buffer     db "here\n",0
 
+LineScoreTable:
+            dw 0, 100, 200, 500, 2000
+
+// BlockTable defines the block shapes using bitmasks, bit 0 is the top left 
+// of a 4x4 grid, bit 1 is the second on the top, and so on.  It only uses
+// 14 bits because the bottom right 2 are not used by any shape.
+// Each row defines one block, with entries for rotation=0,1,2,3
+// Index: block_num * 8 + rotation * 2
+//
+// Bit positions:
+//      0  1  2  3
+//      4  5  6  7
+//      8  9 10 11
+//     12 13 14
+//
+// Decimal:
+//      1       2       4       8
+//      16      32      64      128
+//      256     512     1024    2048 
+//      4096    8192
+//
+BlockTable:
+            dw 2+32+512+1024, 16+32+64+256, 1+2+32+512, 4+16+32+64
+            dw 2+32+256+512, 1+16+32+64, 2+4+32+512, 16+32+64+1024
+            dw 16+32+64+512, 2+32+64+512, 2+16+32+64, 2+16+32+512
+            dw 32+64+512+1024, 32+64+512+1024, 32+64+512+1024, 32+64+512+1024
+            dw 2+32+64+1024, 2+4+16+32, 2+32+64+1024, 2+4+16+32
+            dw 16+32+512+1024, 4+64+32+512, 16+32+512+1024, 4+64+32+512
+            dw 2+32+512+8192, 16+32+64+128, 2+32+512+8192, 16+32+64+128
+
+ResetBoard:
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,0,0,0,0,0,0,0,0,0,0,1
+            dw 1,1,1,1,1,1,1,1,1,1,1,1
+ResetEnd:
+            dw 0
 
 Main():
             jsr InitScreen
@@ -157,18 +205,18 @@ Main():
             hlt
 
 InitScreen():
-            cpy REG_IO_REQ, #init
-            cpy REG_IO_REQ, #initAudio
+            cpy IO_REQUEST, #init
+            cpy IO_REQUEST, #initAudio
             cpy wavptr, #WavDropBlock
-            cpy REG_IO_REQ, #loadWav
+            cpy IO_REQUEST, #loadWav
             cpy wavptr, #WavLineScore
-            cpy REG_IO_REQ, #loadWav
+            cpy IO_REQUEST, #loadWav
             cpy wavptr, #WavLevelUp
-            cpy REG_IO_REQ, #loadWav
+            cpy IO_REQUEST, #loadWav
             cpy wavptr, #WavGameOver
-            cpy REG_IO_REQ, #loadWav
+            cpy IO_REQUEST, #loadWav
             cpy wavptr, #WavNewGame
-            cpy REG_IO_REQ, #loadWav
+            cpy IO_REQUEST, #loadWav
             ret
 
 .init       dw 0x0201
@@ -182,7 +230,7 @@ InitScreen():
 
 PollEvents():
 .loop
-            cpy REG_IO_REQ, #poll
+            cpy IO_REQUEST, #poll
             cmp poll_event, #SDL_QUIT
             jne isKeyDown
             cpy QuitFlag, #1
@@ -253,13 +301,13 @@ OnKeyUp(keycode word):
 
 DrawScreen():
             // Clear the screen to black
-            cpy REG_IO_REQ, #ColorBG
-            cpy REG_IO_REQ, #clear
+            cpy IO_REQUEST, #ColorBG
+            cpy IO_REQUEST, #clear
 
-            cpy REG_IO_REQ, #ColorBlack
-            cpy REG_IO_REQ, #boardRect
-            cpy REG_IO_REQ, #ColorWhite
-            cpy REG_IO_REQ, #boardRect2
+            cpy IO_REQUEST, #ColorBlack
+            cpy IO_REQUEST, #boardRect
+            cpy IO_REQUEST, #ColorWhite
+            cpy IO_REQUEST, #boardRect2
 
             jsr DrawBoard
             jsr DrawScore
@@ -278,9 +326,9 @@ DrawScreen():
             cmp OutroFlag, #0
             jeq drawGameOver
             cpy OutroFlag, #0
-            cpy REG_IO_REQ, #gameOverSound
+            cpy IO_REQUEST, #gameOverSound
 .drawGameOver
-            cpy REG_IO_REQ, #ColorWhite
+            cpy IO_REQUEST, #ColorWhite
             cpy tx, #GameOverX
             cpy ty, #GameOverY
             psh #GameOverMessage
@@ -290,7 +338,7 @@ DrawScreen():
             jne done
             jsr NewGame
 .done            
-            cpy REG_IO_REQ, #present
+            cpy IO_REQUEST, #present
             ret
 
             // device request to clear screen
@@ -315,9 +363,9 @@ DrawScreen():
 
 DrawScore():
             // Level   000000
-            cpy REG_IO_REQ, #ColorScoreBG
-            cpy REG_IO_REQ, #level_rect
-            cpy REG_IO_REQ, #ColorWhite
+            cpy IO_REQUEST, #ColorScoreBG
+            cpy IO_REQUEST, #level_rect
+            cpy IO_REQUEST, #ColorWhite
             cpy tx, #text_x
             cpy ty, #level_y
             psh #level_string
@@ -329,9 +377,9 @@ DrawScore():
             pop #2
 
             // Lines   000000
-            cpy REG_IO_REQ, #ColorScoreBG
-            cpy REG_IO_REQ, #lines_rect
-            cpy REG_IO_REQ, #ColorWhite
+            cpy IO_REQUEST, #ColorScoreBG
+            cpy IO_REQUEST, #lines_rect
+            cpy IO_REQUEST, #ColorWhite
             cpy tx, #text_x
             cpy ty, #lines_y
             psh #lines_string
@@ -343,9 +391,9 @@ DrawScore():
             pop #2
 
             // Score   000000
-            cpy REG_IO_REQ, #ColorScoreBG
-            cpy REG_IO_REQ, #score_rect
-            cpy REG_IO_REQ, #ColorWhite
+            cpy IO_REQUEST, #ColorScoreBG
+            cpy IO_REQUEST, #score_rect
+            cpy IO_REQUEST, #ColorWhite
             cpy tx, #text_x
             cpy ty, #score_y
             psh #score_string
@@ -404,11 +452,11 @@ Draw5Digit(value word):
             jeq fgColor
             cmp first, #0
             jne fgColor
-            cpy REG_IO_REQ, #ColorGrey
+            cpy IO_REQUEST, #ColorGrey
             jmp printChar
 .fgColor
             cpy first, #1
-            cpy REG_IO_REQ, #ColorScoreFG
+            cpy IO_REQUEST, #ColorScoreFG
 .printChar
             add t1, #0x10
             psh t1
@@ -455,8 +503,8 @@ DrawBoard():
 
             mul color, #2
             add color, #BlockColors
-            cpy REG_IO_REQ, *color
-            cpy REG_IO_REQ, #fillRect
+            cpy IO_REQUEST, *color
+            cpy IO_REQUEST, #fillRect
 
             // inner loop
             inc j
@@ -475,41 +523,12 @@ DrawBoard():
             dw CELL_SIZE-2
             dw CELL_SIZE-2
 
-ResetBoard:
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
-            dw 1,1,1,1,1,1,1,1,1,1,1,1
-ResetEnd:
-            dw 0
-
 NewGame():
             .from local word
             .to   local word
 
             cpy OutroFlag, #1
-            cpy REG_IO_REQ, #newGameSound
+            cpy IO_REQUEST, #newGameSound
 
             // Clear the game board
             cpy from, #ResetBoard
@@ -727,7 +746,7 @@ StampyTown():
             .t1 local word
             .ptr local word
 
-            cpy REG_IO_REQ, #dropSound
+            cpy IO_REQUEST, #dropSound
 
             cpy bx, PieceX
             div bx, #COORD_SCALE
@@ -848,7 +867,7 @@ CollapseRows():
 .updateScore
             cmp total_line, #1
             jlt noscore
-            cpy REG_IO_REQ, #lineSound
+            cpy IO_REQUEST, #lineSound
 .noscore
             cpy ptr, total_line
             mul ptr, #2
@@ -860,7 +879,7 @@ CollapseRows():
             cmp Lines, t1
             jlt done
             inc Level
-            cpy REG_IO_REQ, #levelUpSound
+            cpy IO_REQUEST, #levelUpSound
 .done            
             ret
 
@@ -868,21 +887,6 @@ CollapseRows():
             dw WavLineScore
 .levelUpSound dw 0x020c
             dw WavLevelUp
-
-LineScoreTable:
-            dw 0, 100, 200, 500, 2000
-
-// BlockTable defines the block shapes using bitmasks.
-// Each row defines one block, with masks for rotation=0,1,2,3
-// Index: block_num * 8 + rotation * 2
-BlockTable:
-            dw 2+32+512+1024, 16+32+64+256, 1+2+32+512, 4+16+32+64
-            dw 2+32+256+512, 1+16+32+64, 2+4+32+512, 16+32+64+1024
-            dw 16+32+64+512, 2+32+64+512, 2+16+32+64, 2+16+32+512
-            dw 32+64+512+1024, 32+64+512+1024, 32+64+512+1024, 32+64+512+1024
-            dw 2+32+64+1024, 2+4+16+32, 2+32+64+1024, 2+4+16+32
-            dw 16+32+512+1024, 4+64+32+512, 16+32+512+1024, 4+64+32+512
-            dw 2+32+512+8192, 16+32+64+128, 2+32+512+8192, 16+32+64+128
 
 DrawPiece(x word, y word, piece word, rotation word):
             .i local word
@@ -895,7 +899,7 @@ DrawPiece(x word, y word, piece word, rotation word):
             inc ptr
             mul ptr, #2
             add ptr, #BlockColors
-            cpy REG_IO_REQ, *ptr
+            cpy IO_REQUEST, *ptr
 
             // Lookup block mask
             cpy ptr, piece
@@ -915,7 +919,7 @@ DrawPiece(x word, y word, piece word, rotation word):
 
             cpy fillX, x
             cpy fillY, y
-            cpy REG_IO_REQ, #fillRect
+            cpy IO_REQUEST, #fillRect
 .row
             cmp i, #4
             jeq horiz

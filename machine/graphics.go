@@ -271,7 +271,7 @@ func (s *SdlLoadWavHandler) Handle(m Memory, addr uint16) (errCode uint16) {
 		return ErrIOError
 	}
 	wavChunksByName[name] = chunk
-	fmt.Printf("loaded wav: %s\n", path)
+	//fmt.Printf("loaded wav: %s\n", path)
 	return ErrNoErr
 }
 
