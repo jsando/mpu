@@ -126,6 +126,8 @@ NextPiece3:     dw 0
 
 SpaceWait:      dw 0
 
+OutroFlag:      dw 0            // if != 0, play the game over sequence
+
 // Game board ... 12x24 color # of each cell, but left/bottom/right are solid and not drawn
 GameBoard:      ds 12*25*2
 
@@ -133,7 +135,13 @@ GameOverX       = SCREEN_WIDTH / 2 - 4 * LCD_CHAR_SPACE
 GameOverY       = SCREEN_HEIGHT / 2
 GameOverMessage:    db "GAME OVER",0
 
-DebugHere:  dw 0x0101
+WavDropBlock:   db "wav/shoot-01.wav",0
+WavLineScore:   db "wav/collect-point-00.wav",0
+WavLevelUp:     db "wav/achievement-01.wav",0
+WavGameOver:    db "wav/lose-00.wav",0
+WavNewGame:     db "wav/win-00.wav",0
+
+DebugHere:  dw 0x0101           // Quick way to trace execution by printing stuff :)
             dw buffer
 .buffer     db "here\n",0
 
@@ -150,6 +158,17 @@ Main():
 
 InitScreen():
             cpy REG_IO_REQ, #init
+            cpy REG_IO_REQ, #initAudio
+            cpy wavptr, #WavDropBlock
+            cpy REG_IO_REQ, #loadWav
+            cpy wavptr, #WavLineScore
+            cpy REG_IO_REQ, #loadWav
+            cpy wavptr, #WavLevelUp
+            cpy REG_IO_REQ, #loadWav
+            cpy wavptr, #WavGameOver
+            cpy REG_IO_REQ, #loadWav
+            cpy wavptr, #WavNewGame
+            cpy REG_IO_REQ, #loadWav
             ret
 
 .init       dw 0x0201
@@ -157,6 +176,9 @@ InitScreen():
             dw SCREEN_HEIGHT
             dw title
 .title      db "MPU Blocks", 0
+.initAudio  dw 0x020a
+.loadWav    dw 0x020b
+.wavptr     dw 0
 
 PollEvents():
 .loop
@@ -253,6 +275,11 @@ DrawScreen():
             jmp done
 .showGameOver
             // In game-over mode
+            cmp OutroFlag, #0
+            jeq drawGameOver
+            cpy OutroFlag, #0
+            cpy REG_IO_REQ, #gameOverSound
+.drawGameOver
             cpy REG_IO_REQ, #ColorWhite
             cpy tx, #GameOverX
             cpy ty, #GameOverY
@@ -283,6 +310,8 @@ DrawScreen():
             dw BOARD_Y + CELL_SIZE / 2
             dw BOARD_WIDTH - CELL_SIZE - 1
             dw BOARD_HEIGHT - CELL_SIZE - 1
+.gameOverSound  dw 0x020c
+            dw WavGameOver
 
 DrawScore():
             // Level   000000
@@ -479,6 +508,9 @@ NewGame():
             .from local word
             .to   local word
 
+            cpy OutroFlag, #1
+            cpy REG_IO_REQ, #newGameSound
+
             // Clear the game board
             cpy from, #ResetBoard
             cpy to, #GameBoard
@@ -515,6 +547,9 @@ NewGame():
             pop #2
             pop NextPiece3
             ret
+
+.newGameSound  dw 0x020c
+            dw WavNewGame
 
 CreatePiece():
             .valid local word
@@ -692,6 +727,8 @@ StampyTown():
             .t1 local word
             .ptr local word
 
+            cpy REG_IO_REQ, #dropSound
+
             cpy bx, PieceX
             div bx, #COORD_SCALE
             cpy by, PieceY
@@ -743,6 +780,9 @@ StampyTown():
             cpy Piece, #255
             // todo bonus time
             ret
+
+.dropSound  dw 0x020c
+            dw WavDropBlock
 
 CollapseRows():
 .by         local word
@@ -806,6 +846,10 @@ CollapseRows():
             jge updateScore
             jmp loop
 .updateScore
+            cmp total_line, #1
+            jlt noscore
+            cpy REG_IO_REQ, #lineSound
+.noscore
             cpy ptr, total_line
             mul ptr, #2
             add ptr, #LineScoreTable
@@ -816,8 +860,14 @@ CollapseRows():
             cmp Lines, t1
             jlt done
             inc Level
+            cpy REG_IO_REQ, #levelUpSound
 .done            
             ret
+
+.lineSound dw 0x020c
+            dw WavLineScore
+.levelUpSound dw 0x020c
+            dw WavLevelUp
 
 LineScoreTable:
             dw 0, 100, 200, 500, 2000

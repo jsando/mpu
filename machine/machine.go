@@ -14,6 +14,9 @@ const (
 	RandAddr   = 10 // Writes are ignored, reads return random uint8/uint16
 )
 
+// BaseDirEnv is the key for an environment variable to use for loading relative files.
+const BaseDirEnv = "MPU_BASE_DIR"
+
 // Machine implements MPU ... memory processing unit.
 // It supports 27 instructions and 6 addressing modes.
 type Machine struct {

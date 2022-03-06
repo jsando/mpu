@@ -1,28 +1,35 @@
 package machine
 
+import "C"
 import (
 	"fmt"
+	"github.com/veandco/go-sdl2/mix"
 	"github.com/veandco/go-sdl2/sdl"
 	"os"
+	"path/filepath"
 )
 
 const (
-	SdlDeviceId = 0x0200
-	SdlInit     = 1
-	SdlPoll     = 2
-	SdlPresent  = 3
-	SdlClear    = 4
-	SdlSetColor = 5
-	SdlDrawLine = 6
-	SdlDrawRect = 7
-	SdlFillRect = 8
-	SdlTicks    = 9
+	SdlDeviceId  = 0x0200
+	SdlInit      = 1
+	SdlPoll      = 2
+	SdlPresent   = 3
+	SdlClear     = 4
+	SdlSetColor  = 5
+	SdlDrawLine  = 6
+	SdlDrawRect  = 7
+	SdlFillRect  = 8
+	SdlTicks     = 9
+	SdlInitAudio = 0x0a
+	SdlLoadWav   = 0x0b
+	SdlPlayWav   = 0x0c
 )
 
 // I feel SO DIRTY having a global var but don't see how to encapsulate this better.
 // The handlers can't have unexported fields because that breaks encoding/binary :(
 var window *sdl.Window
 var renderer *sdl.Renderer
+var wavChunksByName = make(map[string]*mix.Chunk)
 
 func RegisterSDLHandlers(m *IODispatcher) {
 	m.RegisterIOHandler(SdlDeviceId|SdlInit, &SdlInitHandler{})
@@ -34,6 +41,9 @@ func RegisterSDLHandlers(m *IODispatcher) {
 	m.RegisterIOHandler(SdlDeviceId|SdlDrawRect, &SdlDrawRectHandler{})
 	m.RegisterIOHandler(SdlDeviceId|SdlFillRect, &SdlFillRectHandler{})
 	m.RegisterIOHandler(SdlDeviceId|SdlTicks, &SdlTicksHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlInitAudio, &SdlInitAudioHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlLoadWav, &SdlLoadWavHandler{})
+	m.RegisterIOHandler(SdlDeviceId|SdlPlayWav, &SdlPlayWavHandler{})
 }
 
 type SdlInitHandler struct {
@@ -221,5 +231,67 @@ func (s *SdlTicksHandler) Handle(m Memory, addr uint16) (errCode uint16) {
 	ticks := sdl.GetTicks() / 1000
 	//fmt.Printf("ticks: %d\n", ticks)
 	m.PutWord(addr+2, uint16(ticks))
+	return ErrNoErr
+}
+
+type SdlInitAudioHandler struct {
+	Id uint16
+}
+
+func (s *SdlInitAudioHandler) Handle(m Memory, addr uint16) (errCode uint16) {
+	err := sdl.Init(sdl.INIT_AUDIO)
+	if err != nil {
+		LogIOError("(audio init) error initializing: %s\n", err.Error())
+		return ErrIOError
+	}
+	if err := mix.OpenAudio(mix.DEFAULT_FREQUENCY, mix.DEFAULT_FORMAT, mix.DEFAULT_CHANNELS, mix.DEFAULT_CHUNKSIZE); err != nil {
+		LogIOError("(audio init) error opening mixer: %s\n", err.Error())
+		return ErrIOError
+	}
+	return ErrNoErr
+}
+
+type SdlLoadWavHandler struct {
+	Id   uint16
+	Path uint16
+}
+
+func (s *SdlLoadWavHandler) Handle(m Memory, addr uint16) (errCode uint16) {
+	// its loaded relative to the base dir of whatever file is running, but
+	// mapped for future reference using the name used in this call.
+	name := m.ReadZString(s.Path)
+	if len(name) == 0 {
+		LogIOError("(load wav) empty path\n")
+		return ErrIOError
+	}
+	path := filepath.Join(os.Getenv(BaseDirEnv), name)
+	chunk, err := mix.LoadWAV(path)
+	if err != nil {
+		LogIOError("(load wav) bad chunk: %s", err.Error())
+		return ErrIOError
+	}
+	wavChunksByName[name] = chunk
+	fmt.Printf("loaded wav: %s\n", path)
+	return ErrNoErr
+}
+
+type SdlPlayWavHandler struct {
+	Id   uint16
+	Path uint16
+}
+
+func (s *SdlPlayWavHandler) Handle(m Memory, addr uint16) (errCode uint16) {
+	path := m.ReadZString(s.Path)
+	chunk := wavChunksByName[path]
+	if chunk == nil {
+		LogIOError("(play wav) wav not found for '%s', was it loaded?\n", path)
+		return ErrIOError
+	}
+	_, err := chunk.Play(-1, 0)
+	if err != nil {
+		LogIOError("(play wav) play returned error: %s\n", err.Error())
+		return ErrIOError
+	}
+	//fmt.Printf("playing %s on channel %d\n", path, ch)
 	return ErrNoErr
 }

@@ -91,6 +91,7 @@ func run(inputs []*os.File, monitor bool) {
 
 	var bytes []byte
 	var err error
+	setBaseDirFromInputFile(inputs[0].Name())
 	if src {
 		linker, _ := compile(inputs)
 		bytes = linker.Code()
@@ -110,6 +111,11 @@ func run(inputs []*os.File, monitor bool) {
 		//fmt.Printf("Program completed, memory dump:\n")
 		//m.Dump(os.Stdout, 0, 65535)
 	}
+}
+
+func setBaseDirFromInputFile(path string) {
+	dir := filepath.Dir(path)
+	os.Setenv(machine.BaseDirEnv, dir)
 }
 
 func compile(inputs []*os.File) (*asm.Linker, []string) {

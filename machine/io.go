@@ -100,3 +100,7 @@ func (d *IODispatcher) PutWord(addr uint16, w uint16) {
 func (d *IODispatcher) GetWord(addr uint16) uint16 {
 	return d.lastRegister.GetWord(addr)
 }
+
+func LogIOError(format string, a ...interface{}) {
+	_, _ = fmt.Fprintf(os.Stderr, format, a)
+}
