@@ -50,6 +50,7 @@ NEXT_X          = BOARD_X + BOARD_WIDTH
 NEXT_Y1         = PADDING + CELL_SIZE
 NEXT_Y2         = NEXT_Y1 + 4 * CELL_SIZE
 NEXT_Y3         = NEXT_Y2 + 4 * CELL_SIZE
+COORD_SCALE     = 64
 
 // Globals
 QuitFlag:       dw 0
@@ -131,6 +132,11 @@ GameBoard:      ds 12*25*2
 GameOverX       = SCREEN_WIDTH / 2 - 4 * LCD_CHAR_SPACE
 GameOverY       = SCREEN_HEIGHT / 2
 GameOverMessage:    db "GAME OVER",0
+
+DebugHere:  dw 0x0101
+            dw buffer
+.buffer     db "here\n",0
+
 
 Main():
             jsr InitScreen
@@ -240,8 +246,12 @@ DrawScreen():
             jne noNewPiece
             jsr CreatePiece
             cmp Piece, #255
-            jne noNewPiece
-
+            jeq showGameOver
+.noNewPiece
+            jsr DrawPieces
+            jsr UpdateGame
+            jmp done
+.showGameOver
             // In game-over mode
             cpy REG_IO_REQ, #ColorWhite
             cpy tx, #GameOverX
@@ -252,9 +262,6 @@ DrawScreen():
             cmp KeySpaceDown, #1
             jne done
             jsr NewGame
-.noNewPiece
-            jsr DrawPieces
-            jsr UpdateGame
 .done            
             cpy REG_IO_REQ, #present
             ret
@@ -524,8 +531,8 @@ CreatePiece():
             pop NextPiece3
 
             cpy Rotation, #0
-            cpy PieceX, #(4*256)
-            cpy PieceY, #(2*256)
+            cpy PieceX, #(4*COORD_SCALE)
+            cpy PieceY, #(2*COORD_SCALE)
             cpy PieceDX, PieceX
 
             psh #0
@@ -546,9 +553,9 @@ IsValid(valid word):
             .ptr local word
 
             cpy bx, PieceX
-            div bx, #256
+            div bx, #COORD_SCALE
             cpy by, PieceY
-            div by, #256
+            div by, #COORD_SCALE
 
             // Lookup block mask
             cpy ptr, Piece
@@ -593,7 +600,7 @@ IsValid(valid word):
 .endloop
             mul mask, #2
             inc i
-            cmp i, #14
+            cmp i, #15
             jlt loop
 .done
             cpy valid, #1
@@ -613,11 +620,11 @@ UpdateGame():
             jne checkRight
             cmp PieceX, #33
             jlt checkRight
-            sub PieceX, #32
+            sub PieceX, #8
 .checkRight
             cmp KeyLDown, #1
             jne bumpY
-            add PieceX, #32
+            add PieceX, #8
 .bumpY
             cpy t1, Level
             mul t1, #3
@@ -686,9 +693,9 @@ StampyTown():
             .ptr local word
 
             cpy bx, PieceX
-            div bx, #256
+            div bx, #COORD_SCALE
             cpy by, PieceY
-            div by, #256
+            div by, #COORD_SCALE
 
             // Lookup block mask
             cpy ptr, Piece
@@ -731,7 +738,7 @@ StampyTown():
 .endloop
             mul mask, #2
             inc i
-            cmp i, #14
+            cmp i, #15
             jlt loop
             cpy Piece, #255
             // todo bonus time
@@ -742,20 +749,21 @@ CollapseRows():
 .total_line local word
 .i          local word
 .j          local word
+.k          local word
 .ptr        local word
 .t1         local word
 
             cpy total_line, #0
             cpy by, PieceY
-            div by, #256
+            div by, #COORD_SCALE
             cpy j, #0
 .loop           
-            add by, j
             cmp by, #24
             jeq updateScore
 
-            // count how many in a row are occupied
+            // count how many in a row are occupied            
             cpy ptr, by
+
             mul ptr, #24        // 12 across times 2 bytes/cell
             add ptr, #GameBoard
             add ptr, #2         // skip left column
@@ -776,7 +784,8 @@ CollapseRows():
             dec t1
             mul t1, #24        
             add t1, #GameBoard
-            add t1, #2         
+            add t1, #2       
+            cpy k, by           // loop from by to 2 step -1  
 .collapseLoop
             cpy i, #10
 .copyRow
@@ -787,13 +796,15 @@ CollapseRows():
             jne copyRow
             sub ptr, #20+24
             sub t1, #20+24
-            dec by
-            cmp by, #2
+            dec k
+            cmp k, #2
             jge collapseLoop
 .nextRow
+            inc by
             inc j
             cmp j, #4
-            jlt loop
+            jge updateScore
+            jmp loop
 .updateScore
             cpy ptr, total_line
             mul ptr, #2
@@ -910,29 +921,29 @@ DrawPieces():
             jsr DrawPiece
             pop #8
 
-            // if dx > (px / 256 * 256) then dx = dx - 32
+            // if dx > (px / COORD_SCALE * COORD_SCALE) then dx = dx - 32
             cpy t1, PieceX
-            div t1, #256
-            mul t1, #256
+            div t1, #COORD_SCALE
+            mul t1, #COORD_SCALE
             cmp t1, PieceDX
             jge incdx
-            sub PieceDX, #32
+            sub PieceDX, #8
 .incdx            
-            // if dx < (px / 256 * 256) then dx = dx + 32
+            // if dx < (px / COORD_SCALE * COORD_SCALE) then dx = dx + 32
             cmp PieceDX, t1
             jge draw1
-            add PieceDX, #32
+            add PieceDX, #8
 .draw1
-            // x = dx * CELL_SIZE / 256 + BOARD_LEFT
-            // y = py * CELL_SIZE / 256 + BOARD_TOP - CELL_SIZE - 1
+            // x = dx * CELL_SIZE / COORD_SCALE + BOARD_LEFT
+            // y = py * CELL_SIZE / COORD_SCALE + BOARD_TOP - CELL_SIZE - 1
             cpy t1, PieceDX
             mul t1, #CELL_SIZE
-            div t1, #256
+            div t1, #COORD_SCALE
             add t1, #BOARD_X
             psh t1
             cpy t1, PieceY
             mul t1, #CELL_SIZE
-            div t1, #256
+            div t1, #COORD_SCALE
             add t1, #BOARD_Y
             sub t1, #CELL_SIZE - 1
             psh t1

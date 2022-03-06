@@ -377,6 +377,10 @@ func (l *Linker) resolveWordOperand(frag *Statement, op *Operand) {
 		if byteOp {
 			if op.mode == machine.OffsetByte {
 				ival = ival - l.pc + 1
+
+				if ival > 127 || ival < -128 {
+					l.errorf(frag, "relative offset out of range: %d", ival)
+				}
 			}
 			l.writeByte(ival)
 		} else {
