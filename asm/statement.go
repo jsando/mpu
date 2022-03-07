@@ -11,16 +11,19 @@ import (
 // The parser uses the lexer to create the list of statements,
 // which are then fed to the linker to generate the machine code.
 type Statement struct {
-	next      *Statement
-	file      string
-	line      int
-	labels    []string  //optional labels
-	operation TokenType // TokXXX constant for a directive or opcode
-	operands  []*Operand
-	pcStart   int
-	pcEnd     int
-	fpArgs    []*FpParam
-	fpLocals  []*FpParam
+	next          *Statement
+	file          string
+	line          int
+	labels        []string  //optional labels
+	operation     TokenType // TokXXX constant for a directive or opcode
+	operands      []*Operand
+	pcStart       int
+	pcEnd         int
+	fpArgs        []*FpParam
+	fpLocals      []*FpParam
+	newlineBefore bool
+	blockComment  []string
+	eolComment    string
 }
 
 type FpParam struct {
@@ -59,6 +62,7 @@ type Expr interface {
 
 type IntLiteral struct {
 	value int
+	text  string // original text from source, ie 0xff, 123, 0b_1111
 }
 
 func (e IntLiteral) hasFramePointerSymbols(symbols *SymbolTable) bool {
@@ -69,8 +73,22 @@ func (e IntLiteral) computeValue(symbols *SymbolTable) (ival int, bval []byte, r
 	return e.value, nil, true
 }
 
+type CharLiteral struct {
+	value int
+	text  string // original text from source, ie 'n'
+}
+
+func (c CharLiteral) computeValue(symbols *SymbolTable) (ival int, bval []byte, resolved bool) {
+	return c.value, nil, true
+}
+
+func (c CharLiteral) hasFramePointerSymbols(symbols *SymbolTable) bool {
+	return false
+}
+
 type BytesLiteral struct {
 	value []byte
+	text  string
 }
 
 func (b BytesLiteral) hasFramePointerSymbols(symbols *SymbolTable) bool {

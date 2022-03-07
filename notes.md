@@ -1,22 +1,8 @@
 # My todo list
 
 - Defining a local with the same name as a global should be a warning
-- Really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
-    - Suppose I could add a 1 byte (uint8) to relative-indirect, if none specified its zero?  My lovely byte savings go away :(
-    - Tried it on some sample code and it cleans it up a lot
 - Errors need to print the offending line, but text/scanner doesn't maintain it
 - Bug in line # on errors, prints 1 line less than it should
-- Run from command line, ie pass argc, char **argv somehow?
-- Profile performance
-    - First pass on profiling shows most time is spent (in an sdl app) in SdlPresent, which makes sense.
-    - Within mpu, lots of gc and cpu is spent on byteslicememory.BytesReaderAt.  That is being used to unmarshal every
-      i/o request!  I can probably reuse the same reader for all requests since this is single threaded.  OR, unmarshall
-      manually via m.GetWord, m.GetByte, etc.
-    - fetchoperand & getByte are the next (although at like 1%).  I think abstracting Memory comes at this price, perhaps there's
-      another way to do it (methods on alias of []byte?) that doesn't incur this penalty.
-- a gofmt-equivalent would be nice.  I think the lexer would need a facelift, and the parser would need to emit 100% of the file as Statements, so the formatter could then walk that and output it cleanly.
-- If there were a way to write unit tests in mpu, for mpu programs, that would provide an easy way to
-  iteratively code and run them.
 - cleanup
     - lexer
         - text.scanner leaves quotes on strings, ticks on chars, etc.  It should have an IntValue(), CharValue(), StringValue(), etc.
@@ -25,6 +11,13 @@
     - parser
         - review all the parse functions and make sure they follow the same pattern ... do they call lexer.next?
         - sometimes I use tok := lexer.next and sometimes lexer.tok
+- Really wish I had an indirect-indexed mode, when given a pointer to a struct I need constant offsets off the pointer
+    - Suppose I could add a 1 byte (uint8) to relative-indirect, if none specified its zero?  My lovely byte savings go away :(
+    - Tried it on some sample code and it cleans it up a lot
+    - However, in writing some "real" code it was already pretty easy to hit the signed 8 bit offset limit for branches, this would make it even worse.
+- Run from command line, ie pass argc, char **argv somehow?
+- If there were a way to write unit tests in mpu, for mpu programs, that would provide an easy way to
+  iteratively code and run them.
 - monitor needs a way to view stack contents ... not sure how though unless we know whether they are bytes or words
 - could I actually build a debugger that could inspect variables?
 

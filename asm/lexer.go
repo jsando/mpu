@@ -69,6 +69,7 @@ const (
 	TokHlt
 	TokFunction
 	TokImport
+	TokComment
 	TokEOL
 )
 
@@ -86,7 +87,7 @@ var tokenImage = []string{
 	"jlt", "inc", "dec", "jsr", "ret",
 	"clc", "sec", "clb", "seb", "jcc",
 	"jcs", "sav", "rst", "hlt", "function()",
-	"import", "<eol>",
+	"import", "<comment>", "<eol>",
 }
 
 func (t TokenType) String() string {
@@ -204,16 +205,20 @@ func (l *Lexer) Column() int {
 func (l *Lexer) Next() TokenType {
 	s := l.s
 	var scanToken rune
-	for {
-		scanToken = s.Scan()
-		if scanToken != scanner.Comment {
-			break
-		}
-		text := s.TokenText()
-		l.line += strings.Count(text, "\n")
-	}
+	//for {
+	scanToken = s.Scan()
+	//	if scanToken != scanner.Comment {
+	//		break
+	//	}
+	//	text := s.TokenText()
+	//	l.line += strings.Count(text, "\n")
+	//}
 	l.tok = TokNone
 	switch scanToken {
+	case scanner.Comment:
+		text := s.TokenText()
+		l.line += strings.Count(text, "\n")
+		l.tok = TokComment
 	case '\n':
 		l.line++
 		l.tok = TokEOL

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type Parser struct {
@@ -16,6 +17,8 @@ type Parser struct {
 	last          *Statement
 	label         string   // most recent global label
 	pendingLabels []string // labels to be assigned to the next fragment
+	eolCount      int      // to remember intentional blank lines for reformat
+	comments      []string // pending block comments for next statement
 }
 
 func NewParser(lex *Input) *Parser {
@@ -26,8 +29,26 @@ func NewParser(lex *Input) *Parser {
 }
 
 func (p *Parser) syncNextStmt() TokenType {
-	for p.lexer.Token() == TokEOL {
-		p.lexer.Next()
+skipLoop:
+	for {
+		switch p.lexer.Token() {
+		case TokEOL:
+			p.eolCount++
+			p.lexer.Next()
+		case TokComment:
+			if p.eolCount == 0 && p.last != nil {
+				block := cleanComments([]string{p.lexer.TokenText()})
+				if len(block) > 1 {
+					panic("wanna hear the most annoying sound in the world")
+				}
+				p.last.eolComment = block[0]
+			} else {
+				p.comments = append(p.comments, p.lexer.TokenText())
+			}
+			p.lexer.Next()
+		default:
+			break skipLoop
+		}
 	}
 	return p.lexer.Token()
 }
@@ -225,11 +246,16 @@ func (p *Parser) parseLocalLabel() {
 // into the linked list.
 func (p *Parser) newFragment(operation TokenType) *Statement {
 	fragment := &Statement{
-		file:      p.lexer.FileName(),
-		line:      p.lexer.Line(),
-		labels:    p.pendingLabels,
-		operation: operation,
+		file:          p.lexer.FileName(),
+		line:          p.lexer.Line(),
+		labels:        p.pendingLabels,
+		operation:     operation,
+		blockComment:  cleanComments(p.comments),
+		newlineBefore: p.eolCount > 1,
 	}
+	//fmt.Printf("for %s, got comments: %v, eolcount: %d\n", operation, fragment.blockComment, p.eolCount)
+	p.comments = nil
+	p.eolCount = 0
 	if p.first == nil {
 		p.first = fragment
 		p.last = fragment
@@ -241,15 +267,33 @@ func (p *Parser) newFragment(operation TokenType) *Statement {
 	return fragment
 }
 
+func cleanComments(s []string) []string {
+	clean := []string{}
+	for _, c := range s {
+		c = strings.TrimPrefix(c, "//")
+		c = strings.TrimPrefix(c, "/*")
+		c = strings.TrimSuffix(c, "*/")
+		sa := strings.Split(c, "\n")
+		for _, l := range sa {
+			clean = append(clean, l)
+		}
+	}
+	return clean
+}
+
 // newFragment creates a new fragment with all pending labels and links it
 // into the linked list.
 func (p *Parser) newEquate(id string) *Statement {
 	fragment := &Statement{
-		file:      p.lexer.FileName(),
-		line:      p.lexer.Line(),
-		labels:    []string{id},
-		operation: TokEquals,
+		file:          p.lexer.FileName(),
+		line:          p.lexer.Line(),
+		labels:        []string{id},
+		operation:     TokEquals,
+		blockComment:  cleanComments(p.comments),
+		newlineBefore: p.eolCount > 1,
 	}
+	p.comments = nil
+	p.eolCount = 0
 	if p.first == nil {
 		p.first = fragment
 		p.last = fragment
@@ -425,7 +469,7 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		if err != nil {
 			p.errorf("invalid string literal")
 		}
-		expr = BytesLiteral{value: []byte(s)}
+		expr = BytesLiteral{value: []byte(s), text: p.lexer.TokenText()}
 	case TokInt:
 		// strconv.ParseInt, if passed bitSize=0, will use Go's syntax for literals
 		// such as 0b, 0x, underscores, etc.
@@ -435,13 +479,15 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		if err != nil {
 			p.errorf("invalid integer literal '%s'", p.lexer.TokenText())
 		}
-		expr = IntLiteral{value: int(val)}
+		expr = IntLiteral{value: int(val), text: p.lexer.TokenText()}
 	case TokChar:
-		expr = IntLiteral{value: int(p.lexer.TokenText()[1])}
+		expr = CharLiteral{value: int(p.lexer.TokenText()[1]), text: p.lexer.TokenText()}
 	default:
+		// its not part of an expression, just leave it be
+		return expr
 		// some kind of error
-		p.errorf("expected (expr), identifier, or literal (got %s)", p.lexer.Token())
-		expr = IntLiteral{value: 0}
+		//p.errorf("expected (expr), identifier, or literal (got %s)", p.lexer.Token())
+		//expr = IntLiteral{value: 0}
 		// todo skip to eol?
 	}
 	p.lexer.Next()

@@ -14,9 +14,12 @@ func main() {
 	//var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 	buildCmd := flag.NewFlagSet("build", flag.ExitOnError)
 	outputFile := buildCmd.String("o", "", "Output file")
+
 	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 	sysmon := runCmd.Bool("m", false, "Open system monitor")
-	//flag.Parse()
+
+	fmtCmd := flag.NewFlagSet("fmt", flag.ExitOnError)
+	rewrite := fmtCmd.Bool("w", false, "Rewrite original file")
 
 	//if *cpuprofile != "" {
 	//	f, err := os.Create(*cpuprofile)
@@ -44,10 +47,30 @@ func main() {
 		runCmd.Parse(os.Args[2:])
 		inputs := getInputs(runCmd)
 		run(inputs, *sysmon)
+	case "fmt":
+		fmtCmd.Parse(os.Args[2:])
+		inputs := getInputs(fmtCmd)
+		format(inputs, *rewrite)
 	default:
 		fmt.Println("expected 'build' or 'run' command")
 		os.Exit(1)
 	}
+}
+
+func format(inputs []*os.File, rewrite bool) {
+	if len(inputs) != 1 {
+		fmt.Printf("only handling 1 file right now\n")
+		os.Exit(1)
+	}
+	lexer := asm.NewLexer(inputs[0].Name(), inputs[0])
+	parser := asm.NewParser(asm.NewInput([]asm.TokenReader{lexer}))
+	parser.Parse()
+	parser.PrintErrors()
+	if parser.HasErrors() {
+		os.Exit(1)
+	}
+	p := asm.NewPrinter(os.Stdout)
+	p.Print(parser.Fragments())
 }
 
 func getInputs(flagSet *flag.FlagSet) []*os.File {
@@ -125,7 +148,6 @@ func compile(inputs []*os.File) (*asm.Linker, []string) {
 	if parser.HasErrors() {
 		os.Exit(1)
 	}
-
 	linker := asm.NewLinker(parser.Fragments())
 	linker.Link()
 	linker.PrintMessages()
