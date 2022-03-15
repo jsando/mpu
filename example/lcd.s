@@ -41,7 +41,7 @@ tx:         dw 0                // Text next print x coordinate
 ty:         dw 0                // Text next print y coordinate
 
 DrawString(pstring word):
-    .ch local word
+    var ch word
             cpy ch, #0
 .loop
             seb
@@ -72,10 +72,10 @@ DrawString(pstring word):
             ret
 
 DrawCharacter(char word):
-            .mask local word
-            .test local word
-            .lcd local word
-            .segptr local word
+            var mask word
+            var test word
+            var lcd word
+            var segptr word
 
             // Lookup which segments to draw for the requested character
             cpy lcd, char

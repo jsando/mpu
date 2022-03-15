@@ -13,7 +13,7 @@ IORES   = 8
 
         org 0x10
 main():
-        .i local word
+        var i word
 
         cpy i, #1
 .loop

@@ -7,7 +7,7 @@ RANDOM = 10
 
     org 0x100
 main():
-    .i local word
+    var i word
 
     // Initialize main window
     cpy IO_REQUEST, #io_window_req
@@ -60,8 +60,8 @@ main():
 
 // result = value - (value / range * range)
 Random(result word, range word):
-    .i local word
-    .j local word
+    var i word
+    var j word
     cpy i, RANDOM   // get a random number in range 0-65535
     cpy j, i        // value / range * range
     div j, range

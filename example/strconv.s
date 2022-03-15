@@ -8,9 +8,9 @@
 //      buffer      Pointer to buffer to leave the ASCII string in (with null at end)
 //      bsize       Size of buffer in bytes.  Value is right-aligned in buffer.
 Itoa(value word, buffer word, bsize word):
-    .next local word
-    .t1 local word
-    .t2 local word
+    var next word
+    var t1 word
+    var t2 word
         clc
         add buffer, bsize // start at right side of buffer
         dec buffer

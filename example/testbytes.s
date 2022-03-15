@@ -6,8 +6,8 @@ s2: ds 20
 
     org 0x100    
 main():
-    .p1 local word
-    .p2 local word
+    var p1 word
+    var p2 word
 
     cpy p1, #s1
     cpy p2, #s2

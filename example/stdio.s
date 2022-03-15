@@ -31,7 +31,7 @@ Println():
 // Print the given value as a 4-digit hexadecimal number.
 //
 PrintHex(hi byte, lo byte):
-                .t1 local byte
+                var t1 byte
 
                 seb
                 cpy t1, hi

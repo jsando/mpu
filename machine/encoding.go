@@ -1,6 +1,8 @@
 package machine
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type AddressMode byte
 
@@ -77,10 +79,17 @@ var mnemonics = []string{
 }
 
 func (o OpCode) String() string {
+	if int(o) >= len(mnemonics) {
+		panic(fmt.Sprintf("invalid opcode %d", o))
+	}
 	return mnemonics[o]
 }
 
 func DecodeOp(in byte) (OpCode, AddressMode, AddressMode) {
+	// All undefined ops will behave as a halt
+	if int(in) >= len(opTable) {
+		return Hlt, Implied, Implied
+	}
 	encoding := opTable[in]
 	return encoding.op, encoding.m1, encoding.m2
 }
@@ -97,7 +106,7 @@ func EncodeOp(op OpCode, m1, m2 AddressMode) byte {
 
 // Encoding defines the opcode and two address modes for each instruction.
 // TODO It might be easier to both define and lookup at runtime by using bitfields
-// in an int, rather than fields in a struct.  If each operand mode is a flag
+// want an int, rather than fields want a struct.  If each operand mode is a flag
 // then the combos can be too ... AbsAbs.
 // Add | AbsAbs, Sub | AbsAbs, Mul | AbsAbs, ...
 // may be worth a microbenchmark to see the runtime performance variations.

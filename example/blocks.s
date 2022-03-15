@@ -1,3 +1,5 @@
+// this is a fully functional tetris clone for mpu
+
             import "random"
             import "lcd"
             import "stdio"
@@ -266,7 +268,7 @@ PollEvents():
 .poll_data  ds 8                
 
 OnKeyDown(keycode word):
-            .tabptr local word
+            var tabptr word
 
             cpy tabptr, #KeyTable
 .loop            
@@ -283,7 +285,7 @@ OnKeyDown(keycode word):
             ret
 
 OnKeyUp(keycode word):
-            .tabptr local word
+            var tabptr word
 
             cpy tabptr, #KeyTable
 .loop            
@@ -432,10 +434,10 @@ DrawScore():
             dw LCD_LINE_SPACE
 
 Draw5Digit(value word):
-            .t1 local word
-            .t2 local word
-            .divisor local word
-            .first local word
+            var t1  word
+            var t2 word
+            var divisor word
+            var first word
 
             cpy first, #0
             cpy divisor, #10000
@@ -471,13 +473,13 @@ Draw5Digit(value word):
             ret
 
 DrawBoard():
-            .i local word
-            .j local word
-            .x local word
-            .y local word
-            .boardPtr local word
-            .color local word
-            .t1 local word
+            var i word
+            var j word
+            var x word
+            var y word
+            var boardPtr word
+            var color word
+            var t1 word
 
             cpy i, #1
 .iLoop
@@ -524,8 +526,8 @@ DrawBoard():
             dw CELL_SIZE-2
 
 NewGame():
-            .from local word
-            .to   local word
+            var from word
+            var to word
 
             cpy OutroFlag, #1
             cpy IO_REQUEST, #newGameSound
@@ -571,7 +573,7 @@ NewGame():
             dw WavNewGame
 
 CreatePiece():
-            .valid local word
+            var valid word
 
             cpy Piece, NextPiece1
             cpy NextPiece1, NextPiece2
@@ -598,13 +600,13 @@ CreatePiece():
             ret
 
 IsValid(valid word):
-            .i local word
-            .mask local word
-            .bx local word
-            .by local word
-            .block local word
-            .t1 local word
-            .ptr local word
+            var i word
+            var mask word
+            var bx word
+            var by word
+            var block word
+            var t1 word
+            var ptr word
 
             cpy bx, PieceX
             div bx, #COORD_SCALE
@@ -661,10 +663,10 @@ IsValid(valid word):
             ret
 
 UpdateGame():
-            .t1 local word
-            .oldx local word
-            .oldy local word
-            .oldr local word
+            var t1 word
+            var oldx word
+            var oldy word
+            var oldr word
 
             cpy oldx, PieceX
             cpy oldy, PieceY
@@ -738,13 +740,13 @@ UpdateGame():
             ret
 
 StampyTown():
-            .i local word
-            .mask local word
-            .bx local word
-            .by local word
-            .block local word
-            .t1 local word
-            .ptr local word
+            var i word
+            var mask word
+            var bx word
+            var by word
+            var block word
+            var t1 word
+            var ptr word
 
             cpy IO_REQUEST, #dropSound
 
@@ -804,13 +806,13 @@ StampyTown():
             dw WavDropBlock
 
 CollapseRows():
-.by         local word
-.total_line local word
-.i          local word
-.j          local word
-.k          local word
-.ptr        local word
-.t1         local word
+var by          word
+var total_line  word
+var i           word
+var j           word
+var k           word
+var ptr         word
+var t1          word
 
             cpy total_line, #0
             cpy by, PieceY
@@ -889,11 +891,11 @@ CollapseRows():
             dw WavLevelUp
 
 DrawPiece(x word, y word, piece word, rotation word):
-            .i local word
-            .mask local word
-            .block local word
-            .t1 local word
-            .ptr local word
+            var i word
+            var mask word
+            var block word
+            var t1 word
+            var ptr word
 
             cpy ptr, piece
             inc ptr
@@ -949,7 +951,7 @@ DrawPiece(x word, y word, piece word, rotation word):
 
 // Draw the current and next pieces on the screen.
 DrawPieces():
-            .t1 local word
+            var t1 word
 
             // next 1
             psh #NEXT_X

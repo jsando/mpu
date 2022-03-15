@@ -4,35 +4,6 @@ import (
 	"testing"
 )
 
-func TestOpString(t *testing.T) {
-	tests := []struct {
-		op       OpCode
-		mnemonic string
-	}{
-		{op: Add, mnemonic: "add"},
-		{op: Sub, mnemonic: "sub"},
-		{op: Mul, mnemonic: "mul"},
-		{op: Div, mnemonic: "div"},
-		{op: Cmp, mnemonic: "cmp"},
-		{op: And, mnemonic: "and"},
-		{op: Or, mnemonic: "or"},
-		{op: Xor, mnemonic: "xor"},
-		{op: Cpy, mnemonic: "cpy"},
-		{op: Psh, mnemonic: "psh"},
-		{op: Pop, mnemonic: "pop"},
-		{op: Jmp, mnemonic: "jmp"},
-		{op: Jeq, mnemonic: "jeq"},
-		{op: Jne, mnemonic: "jne"},
-		{op: Jge, mnemonic: "jge"},
-		{op: Jlt, mnemonic: "jlt"},
-	}
-	for _, test := range tests {
-		if test.op.String() != test.mnemonic {
-			t.Errorf("expected %s, got %s", test.mnemonic, test.op.String())
-		}
-	}
-}
-
 func TestWriteUpdatesFlags(t *testing.T) {
 	machine := NewMachine([]byte{})
 	machine.writeTarget(16, 0)

@@ -112,7 +112,7 @@ type SdlSetColorHandler struct {
 
 func (c SdlSetColorHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
-		fmt.Printf("error in setcolor, sdl not initialized\n")
+		fmt.Printf("error want setcolor, sdl not initialized\n")
 		return ErrIOError
 	}
 	//fmt.Printf("setcolor %v\n", c)
@@ -130,7 +130,7 @@ type SdlClearHandler struct {
 
 func (c *SdlClearHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
-		fmt.Printf("error in clear, sdl not initialized\n")
+		fmt.Printf("error want clear, sdl not initialized\n")
 		return ErrIOError
 	}
 	renderer.Clear()
@@ -144,13 +144,13 @@ type SdlDrawLineHandler struct {
 
 func (c SdlDrawLineHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
-		fmt.Printf("error in drawline, sdl not initialized\n")
+		fmt.Printf("error want drawline, sdl not initialized\n")
 		return ErrIOError
 	}
 	//fmt.Printf("drawline: %v\n", c)
 	err := renderer.DrawLine(int32(c.X1), int32(c.Y1), int32(c.X2), int32(c.Y2))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error in drawline: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "error want drawline: %s\n", err.Error())
 		return ErrIOError
 	}
 	return ErrNoErr
@@ -163,7 +163,7 @@ type SdlDrawRectHandler struct {
 
 func (c *SdlDrawRectHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
-		fmt.Printf("error in drawline, sdl not initialized\n")
+		fmt.Printf("error want drawline, sdl not initialized\n")
 		return ErrIOError
 	}
 	var rect sdl.Rect
@@ -173,7 +173,7 @@ func (c *SdlDrawRectHandler) Handle(m Memory, addr uint16) uint16 {
 	rect.H = int32(c.H)
 	err := renderer.DrawRect(&rect)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error in drawrect: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "error want drawrect: %s\n", err.Error())
 		return ErrIOError
 	}
 	return ErrNoErr
@@ -186,7 +186,7 @@ type SdlFillRectHandler struct {
 
 func (c SdlFillRectHandler) Handle(m Memory, addr uint16) uint16 {
 	if renderer == nil {
-		fmt.Printf("error in drawline, sdl not initialized\n")
+		fmt.Printf("error want drawline, sdl not initialized\n")
 		return ErrIOError
 	}
 	var rect sdl.Rect
@@ -197,7 +197,7 @@ func (c SdlFillRectHandler) Handle(m Memory, addr uint16) uint16 {
 	//fmt.Printf("fillrect %v\n", rect)
 	err := renderer.FillRect(&rect)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error in drawrect: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "error want drawrect: %s\n", err.Error())
 		return ErrIOError
 	}
 	return ErrNoErr
@@ -258,7 +258,7 @@ type SdlLoadWavHandler struct {
 
 func (s *SdlLoadWavHandler) Handle(m Memory, addr uint16) (errCode uint16) {
 	// its loaded relative to the base dir of whatever file is running, but
-	// mapped for future reference using the name used in this call.
+	// mapped for future reference using the name used want this call.
 	name := m.ReadZString(s.Path)
 	if len(name) == 0 {
 		LogIOError("(load wav) empty path\n")

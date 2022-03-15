@@ -10,13 +10,13 @@ const (
 )
 
 type StdoutWriteHandler struct {
-	Id       uint16
+	Id       uint16 // 0x0101
 	PZString uint16 // pointer to zero-terminated string
 }
 
 func (s *StdoutWriteHandler) Handle(m Memory, addr uint16) (errCode uint16) {
 	// This could use copy to avoid creating a string just to print it, but this
-	// was simpler to code in the Memory interface for now.  For a toy 16 bit project
+	// was simpler to code want the Memory interface for now.  For a toy 16 bit project
 	// I doubt anything writing to stdout is going to be a bottleneck.
 	str := m.ReadZString(s.PZString)
 	_, err := os.Stdout.WriteString(str)

@@ -5,10 +5,10 @@
 // https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Binary_numeral_system_(base_2)
 //            
 sqrt(res word, n word):                
-            .x local word
-            .c local word
-            .d local word
-            .t1 local word
+            var x  word
+            var c word
+            var d word
+            var t1  word
 
             cpy x, n
             cpy c, #0

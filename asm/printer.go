@@ -22,6 +22,90 @@ func NewPrinter(w io.Writer) *Printer {
 	return &Printer{w: w}
 }
 
+func (p *Printer) Print(stmt Statement) {
+	emitln := true
+	header := true
+	for stmt != nil {
+		if p.column != 0 && emitln {
+			p.newline()
+		}
+		emitln = true
+		if stmt.NewlineBefore() {
+			p.newline()
+		}
+		// block comments on functions or global equates or labels are aligned to left margin
+		// otherwise in the op column
+		commentIndent := !isGlobal(stmt) && !header
+		for _, c := range stmt.BlockComment() {
+			if commentIndent {
+				p.tab(OpColumn)
+			}
+			p.printf("//%s", c)
+			p.newline()
+		}
+		header = false
+		switch t := stmt.(type) {
+		case *EquateStatement:
+			id := toLocal(t.name)
+			if id != t.name {
+				id = "." + id
+			}
+			p.print(id)
+			p.tab(OpColumn)
+			p.print("= ")
+			p.expr(t.value)
+		case *DefineByteStatement:
+			p.tab(OpColumn)
+			p.print("db ")
+			p.exprList(t.values)
+		case *DefineWordStatement:
+			p.tab(OpColumn)
+			p.print("dw ")
+			p.exprList(t.values)
+		case *DefineSpaceStatement:
+			p.tab(OpColumn)
+			p.print("ds ")
+			p.expr(t.size)
+		case *ImportStatement:
+			p.tab(OpColumn)
+			p.printf("import \"%s\"", t.path)
+		case *OrgStatement:
+			p.tab(OpColumn)
+			p.print("org ")
+			p.expr(t.origin)
+		case *LabelStatement:
+			next := stmt.Next()
+			_, ok := next.(*InstructionStatement)
+			if !ok {
+				emitln = false
+			}
+			p.label(t.name)
+		case *FunctionStatement:
+			p.printf("%s(", t.name)
+			count := 0
+			for _, arg := range t.fpArgs {
+				if count != 0 {
+					p.printf(", ")
+				}
+				p.printf("%s %s", toLocal(arg.id), wordOrByte(arg.size))
+				count++
+			}
+			p.printf("):")
+		case *VarStatement:
+			p.tab(OpColumn)
+			p.printf("var %s %s", toLocal(t.name), wordOrByte(t.size))
+		case *InstructionStatement:
+			p.tab(OpColumn)
+			p.stmt(t)
+		default:
+			panic("unknown statement type")
+		}
+		p.comment(stmt)
+		stmt = stmt.Next()
+	}
+	p.newline()
+}
+
 func (p *Printer) printf(format string, a ...interface{}) {
 	n, err := fmt.Fprintf(p.w, format, a...)
 	if err != nil {
@@ -30,90 +114,56 @@ func (p *Printer) printf(format string, a ...interface{}) {
 	p.column += n
 }
 
+func (p *Printer) print(s string) {
+	n, err := fmt.Fprint(p.w, s)
+	if err != nil {
+		panic(err)
+	}
+	p.column += n
+}
+
+func (p *Printer) label(label string) {
+	if p.column != 0 {
+		p.newline()
+	}
+	loc := toLocal(label)
+	if loc == label {
+		loc += ":"
+	} else {
+		loc = "." + loc
+	}
+	p.print(loc)
+}
+
+func (p *Printer) labelOp(label, op string) {
+	p.label(label)
+	p.tab(OpColumn)
+	p.print(op)
+	p.print(" ")
+}
+
 func (p *Printer) newline() {
 	fmt.Fprintln(p.w)
 	p.column = 0
 }
 
-func (p *Printer) Print(stmt *Statement) {
-	for stmt != nil {
-		if p.column != 0 {
-			p.newline()
-		}
-		if stmt.newlineBefore {
-			p.newline()
-		}
-
-		// block comments on functions or global equates or labels are aligned to left margin
-		// otherwise in the op column
-		commentIndent := !isGlobal(stmt)
-		for _, c := range stmt.blockComment {
-			if commentIndent {
-				p.tab(OpColumn)
-			}
-			p.printf(";%s", c)
-			p.newline()
-		}
-		for _, lbl := range stmt.labels {
-			// todo why is this in a for loop??? equates too?
-			if stmt.operation == TokFunction {
-				p.printf("%s(", lbl)
-				count := 0
-				for _, arg := range stmt.fpArgs {
-					if count != 0 {
-						p.printf(", ")
-					}
-					p.printf("%s %s", toLocal(arg.id), wordOrByte(arg.size))
-					count++
-				}
-				p.printf("):") // todo could have line comment
-				p.newline()
-				for _, arg := range stmt.fpLocals {
-					p.tab(OpColumn)
-					p.printf("var %s %s", toLocal(arg.id), wordOrByte(arg.size))
-					p.newline()
-				}
-			} else if stmt.operation == TokEquals {
-				local := toLocal(lbl)
-				if local != lbl {
-					local = "." + local
-				}
-				p.printf("%s", local)
-			} else {
-				local := toLocal(lbl)
-				if local != lbl {
-					p.printf(".%s", local)
-				} else {
-					p.printf("%s:", local)
-				}
-				if stmt.newlineBefore {
-					p.newline()
-				}
-				if p.column >= OpColumn-1 {
-					p.newline()
-				}
-			}
-		}
-		if stmt.operation != TokFunction {
-			p.tab(OpColumn)
-			p.stmt(stmt)
-			if len(stmt.eolComment) > 0 {
-				p.tab(CommentColumn)
-				p.printf(";%s", stmt.eolComment)
-			}
-			p.newline()
-		}
-		stmt = stmt.next
+func (p *Printer) comment(s Statement) {
+	c := s.EolComment()
+	if len(c) > 0 {
+		p.tab(CommentColumn)
+		p.printf("//%s", c)
 	}
 }
 
-func isGlobal(stmt *Statement) bool {
-	if stmt.operation == TokFunction {
+func isGlobal(stmt Statement) bool {
+	switch t := stmt.(type) {
+	case *FunctionStatement:
 		return true
-	}
-	for _, lbl := range stmt.labels {
-		loc := toLocal(lbl)
-		if loc == lbl {
+	case *EquateStatement:
+		return true
+	case *LabelStatement:
+		loc := toLocal(t.name)
+		if loc == t.name {
 			return true
 		}
 	}
@@ -148,7 +198,7 @@ func (p *Printer) tab(column int) {
 	}
 }
 
-func (p *Printer) stmt(stmt *Statement) {
+func (p *Printer) stmt(stmt *InstructionStatement) {
 	p.printf("%s ", stmt.operation)
 	count := 0
 	for _, op := range stmt.operands {
@@ -179,12 +229,12 @@ func (p *Printer) expr(expr Expr) {
 		p.printf("%s", e.text)
 	case IntLiteral:
 		text := e.text
-		if strings.HasPrefix(text, "0x") {
-			text = "$" + text[2:]
-		}
-		if strings.HasPrefix(text, "0b") {
-			text = "%" + text[2:]
-		}
+		//if strings.HasPrefix(text, "0x") {
+		//	text = "$" + text[2:]
+		//}
+		//if strings.HasPrefix(text, "0b") {
+		//	text = "%" + text[2:]
+		//}
 		p.printf("%s", text)
 	case ExprUnary:
 		p.printf("%s", e.op)
@@ -197,5 +247,16 @@ func (p *Printer) expr(expr Expr) {
 		p.printf("%s", e.text)
 	case ExprIdent:
 		p.printf("%s", e.ident)
+	}
+}
+
+func (p *Printer) exprList(values []Expr) {
+	count := 0
+	for _, expr := range values {
+		if count > 0 {
+			p.print(",")
+		}
+		p.expr(expr)
+		count++
 	}
 }

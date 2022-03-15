@@ -1,7 +1,7 @@
+// Test driver for lcd
 
             import "lcd"
 
-// Test driver for lcd
             dw main
 
 // Define font size, these are referenced from lcd.s

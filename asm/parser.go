@@ -3,6 +3,7 @@ package asm
 import (
 	"fmt"
 	"github.com/jsando/mpu/machine"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,18 +14,100 @@ type Parser struct {
 	messages      *Messages
 	lexer         *Input
 	pc            int
-	first         *Statement
-	last          *Statement
-	label         string   // most recent global label
-	pendingLabels []string // labels to be assigned to the next fragment
-	eolCount      int      // to remember intentional blank lines for reformat
-	comments      []string // pending block comments for next statement
+	first         Statement
+	last          Statement
+	eolCount      int                // to remember intentional blank lines for reformat
+	comments      []string           // pending block comments for next statement
+	processImport bool               // If just formatting don't automatically append imports
+	function      *FunctionStatement // Current function to append vars to or nil
+	global        string             // Most recent global (function or label), to define locals against
 }
 
 func NewParser(lex *Input) *Parser {
 	return &Parser{
-		messages: &Messages{},
-		lexer:    lex,
+		messages:      &Messages{},
+		lexer:         lex,
+		processImport: true,
+	}
+}
+
+func NewParserFromReader(name string, r io.Reader) *Parser {
+	return NewParser(NewInput([]TokenReader{NewLexer(name, r)}))
+}
+
+func (p *Parser) SetProcessImport(process bool) {
+	p.processImport = process
+}
+
+// Files returns the list of all files processed.
+func (p *Parser) Files() []string {
+	return p.lexer.Files()
+}
+
+func (p *Parser) PrintErrors() {
+	p.messages.Print()
+}
+
+func (p *Parser) HasErrors() bool {
+	return p.messages.errors > 0
+}
+
+func (p *Parser) Statements() Statement {
+	return p.first
+}
+
+func (p *Parser) addStatement(s Statement) {
+	s.SetFile(p.lexer.FileName())
+	s.SetLine(p.lexer.Line())
+	comments := cleanComments(p.comments)
+	s.SetBlockComment(comments)
+	commentLines := len(comments)
+	eolCount := p.eolCount - commentLines
+	s.SetNewlineBefore(eolCount > 1)
+
+	p.comments = nil
+	p.eolCount = 0
+	if p.first == nil {
+		p.first = s
+		p.last = s
+	} else {
+		p.last.SetNext(s)
+		p.last = s
+	}
+}
+
+func cleanComments(s []string) []string {
+	clean := []string{}
+	for _, c := range s {
+		c = strings.TrimPrefix(c, "//")
+		c = strings.TrimPrefix(c, "/*")
+		c = strings.TrimSuffix(c, "*/")
+		sa := strings.Split(c, "\n")
+		for _, l := range sa {
+			clean = append(clean, l)
+		}
+	}
+	return clean
+}
+
+func (p *Parser) errorf(format string, a ...interface{}) {
+	s := fmt.Sprintf(format, a...)
+	p.messages.Error(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
+}
+
+func (p *Parser) warnf(format string, a ...interface{}) {
+	s := fmt.Sprintf(format, a...)
+	p.messages.Warn(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
+}
+
+func (p *Parser) infof(format string, a ...interface{}) {
+	s := fmt.Sprintf(format, a...)
+	p.messages.Info(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
+}
+
+func (p *Parser) expect(tokenType TokenType) {
+	if p.lexer.Token() != tokenType {
+		p.errorf("expected: %s, got: %s", tokenType, p.lexer.TokenText())
 	}
 }
 
@@ -41,7 +124,7 @@ skipLoop:
 				if len(block) > 1 {
 					panic("wanna hear the most annoying sound in the world")
 				}
-				p.last.eolComment = block[0]
+				p.last.SetEolComment(block[0])
 			} else {
 				p.comments = append(p.comments, p.lexer.TokenText())
 			}
@@ -76,26 +159,38 @@ func (p *Parser) Parse() {
 	tok := lexer.Next()
 loop:
 	for {
+		// Skip of EOL and Comment but buffer them up to attach to
+		// the following statement.  Line comments are attached to
+		// the last statement.
 		tok = p.syncNextStmt()
+
+		// Parse based on token.
 		switch tok {
 		case TokEOF:
 			break loop
 		case TokDot:
-			p.parseLocalLabel()
+			tok = p.lexer.Next()
+			p.parseLocalSymbol()
 		case TokIdent:
-			text := lexer.TokenText()
-			tok = toKeyword(text)
-			if tok == TokIdent {
-				p.parseLabel()
-			} else {
-				if tok == TokImport {
-					p.parseImports()
-				} else {
-					fragment := p.newFragment(tok)
-					p.lexer.Next()
-					operands := p.parseOperands()
-					fragment.operands = operands
-				}
+			tok = toKeyword(lexer.TokenText())
+			switch tok {
+			case TokIdent:
+				p.parseGlobalSymbol() // global label, equate, or function
+			case TokImport:
+				p.parseImports()
+			case TokDb:
+				p.parseDb()
+			case TokDw:
+				p.parseDw()
+			case TokDs:
+				p.parseDs()
+			case TokOrg:
+				p.parseOrg()
+			case TokVar:
+				p.parseVar()
+			default:
+				// assume it's an instruction
+				p.parseInstruction(tok)
 			}
 		default:
 			p.errorf("unexpected: %s", p.lexer.Token())
@@ -104,12 +199,9 @@ loop:
 	}
 }
 
-// Files returns the list of all files processed.
-func (p *Parser) Files() []string {
-	return p.lexer.Files()
-}
-
 func (p *Parser) parseImports() {
+	stmt := &ImportStatement{}
+	p.addStatement(stmt)
 	tok := p.lexer.Next()
 	if tok != TokString {
 		p.errorf("imports requires string as argument")
@@ -120,30 +212,45 @@ func (p *Parser) parseImports() {
 		p.errorf("bad import name '%s'", p.lexer.TokenText())
 		return
 	}
-	dir := filepath.Dir(p.lexer.FileName())
-	name = filepath.Join(dir, name) + ".s"
-	file, err := os.Open(name)
-	if err != nil {
-		p.errorf("error opening file '%s': %s\n", name, err.Error())
-		return
+	stmt.path = name
+
+	// When running fmt we don't want to append all included files to the one original file :)
+	// Just need the AST to reformat the code.
+	if p.processImport {
+		dir := filepath.Dir(p.lexer.FileName())
+		name = filepath.Join(dir, name) + ".s"
+		file, err := os.Open(name)
+		if err != nil {
+			p.errorf("error opening file '%s': %s\n", name, err.Error())
+			return
+		}
+		r := NewLexer(file.Name(), file)
+		p.lexer.Append(r)
 	}
-	r := NewLexer(file.Name(), file)
-	p.lexer.Append(r)
 	p.lexer.Next()
 }
 
-func (p *Parser) parseLabel() {
+func (p *Parser) parseGlobalSymbol() {
+	p.function = nil
 	text := p.lexer.TokenText()
 	tok := p.lexer.Next()
 	if tok == TokEquals {
+		p.global = ""
+		stmt := &EquateStatement{
+			name: text,
+		}
+		p.addStatement(stmt)
 		p.lexer.Next()
-		fragment := p.newEquate(text)
-		operands := p.parseOperands()
-		fragment.operands = operands
+		stmt.value = p.parseExpr()
 	} else if tok == TokColon {
-		p.defineLabel(text)
+		p.global = text
+		stmt := &LabelStatement{
+			name: text,
+		}
+		p.addStatement(stmt)
 		p.lexer.Next()
 	} else if tok == TokLeftParen {
+		p.global = text
 		p.parseFunctionDecl(text)
 	} else {
 		p.errorf("expected =, :, or (): after identifier '%s'", text)
@@ -151,9 +258,11 @@ func (p *Parser) parseLabel() {
 }
 
 func (p *Parser) parseFunctionDecl(fnName string) {
-	p.defineLabel(fnName)
+	fn := &FunctionStatement{
+		name: fnName,
+	}
+	p.addStatement(fn)
 	p.lexer.Next()
-	frag := p.newFragment(TokFunction)
 	for p.lexer.Token() != TokRightParen {
 		if p.lexer.Token() != TokIdent {
 			p.errorf("expected: identifier, got: %s", p.lexer.Token())
@@ -178,8 +287,11 @@ func (p *Parser) parseFunctionDecl(fnName string) {
 			p.skipToEOL()
 			return
 		}
-		// ok we have id, size ... wtf do we do now
-		frag.AddFpArg(id, size)
+		fn.fpArgs = append(fn.fpArgs, &FpParam{
+			id:     id,
+			size:   size,
+			offset: 0,
+		})
 		tok = p.lexer.Next()
 		if tok != TokComma {
 			break
@@ -190,145 +302,123 @@ func (p *Parser) parseFunctionDecl(fnName string) {
 	if tok != TokColon {
 		p.errorf("expected ':', got: %s", p.lexer.TokenText())
 	}
+	p.function = fn
 	p.lexer.Next()
 }
 
-func (p *Parser) parseLocalLabel() {
-	tok := p.lexer.Next()
-	if tok != TokIdent {
-		p.errorf("expected identifier, got: %s", tok)
+func (p *Parser) parseLocalSymbol() {
+	if p.lexer.Token() != TokIdent {
+		p.errorf("expected identifier, got: %s", p.lexer.Token())
 		p.skipToEOL()
 		return
 	}
-	tokenText := p.lexer.TokenText()
+	if len(p.global) == 0 {
+		p.errorf("locals are local to the nearest global but none is in scope")
+		p.skipToEOL()
+		return
+	}
+	id := p.global + "." + p.lexer.TokenText()
 	p.lexer.Next()
 
-	// If followed by '=', its a local equate
 	if p.lexer.Token() == TokEquals {
+		stmt := &EquateStatement{
+			name: id,
+		}
+		p.addStatement(stmt)
 		p.lexer.Next()
-		fragment := p.newEquate(p.label + "." + tokenText)
-		operands := p.parseOperands()
-		fragment.operands = operands
-	} else if p.lexer.Token() == TokIdent && p.lexer.TokenText() == "local" {
-		// if followed by 'local' it's a local decl ie fp relative
-		if p.last.operation != TokFunction {
-			p.errorf("'local' can only be used immediately after function declaration")
-			return
+		stmt.value = p.parseExpr()
+	} else {
+		stmt := &LabelStatement{
+			name: id,
 		}
-		tok = p.lexer.Next()
-		if tok != TokIdent {
-			p.errorf("expected: identifier, got: %s", p.lexer.Token())
-			p.skipToEOL()
-			return
+		p.addStatement(stmt)
+	}
+}
+
+func (p *Parser) parseDb() {
+	stmt := &DefineByteStatement{}
+	p.addStatement(stmt)
+	p.lexer.Next()
+	stmt.values = p.parseExpressionList()
+}
+
+func (p *Parser) parseDw() {
+	stmt := &DefineWordStatement{}
+	p.addStatement(stmt)
+	p.lexer.Next()
+	stmt.values = p.parseExpressionList()
+}
+
+func (p *Parser) parseDs() {
+	stmt := &DefineSpaceStatement{}
+	p.addStatement(stmt)
+	p.lexer.Next()
+	stmt.size = p.parseExpr()
+}
+
+func (p *Parser) parseOrg() {
+	stmt := &OrgStatement{}
+	p.addStatement(stmt)
+	p.lexer.Next()
+	stmt.origin = p.parseExpr()
+}
+
+func (p *Parser) parseVar() {
+	if p.function == nil {
+		p.errorf("var is only valid within function but none is in scope")
+		p.skipToEOL()
+		return
+	}
+	stmt := &VarStatement{}
+	p.addStatement(stmt)
+	tok := p.lexer.Next()
+	if tok != TokIdent {
+		p.errorf("expected: identifier, got: %s", p.lexer.Token())
+		p.skipToEOL()
+		return
+	}
+	stmt.name = p.function.name + "." + p.lexer.TokenText()
+	p.lexer.Next()
+	sizeText := p.lexer.TokenText()
+	if sizeText == "word" {
+		stmt.size = 2
+	} else if sizeText == "byte" {
+		stmt.size = 1
+	} else {
+		p.errorf("expected 'word' or 'byte', got: %s", sizeText)
+		p.skipToEOL()
+		return
+	}
+	p.function.fpLocals = append(p.function.fpLocals, &FpParam{
+		id:   stmt.name,
+		size: stmt.size,
+	})
+	p.lexer.Next()
+}
+
+func (p *Parser) parseInstruction(tok TokenType) {
+	stmt := &InstructionStatement{
+		operation: tok,
+	}
+	p.addStatement(stmt)
+	p.lexer.Next()
+	stmt.operands = p.parseOperands()
+}
+
+func (p *Parser) parseExpressionList() []Expr {
+	var list []Expr
+	for {
+		expr := p.parseExpr()
+		if expr == nil {
+			return list
 		}
-		id := p.label + "." + tokenText
-		var size int
-		sizeText := p.lexer.TokenText()
-		if sizeText == "word" {
-			size = 2
-		} else if sizeText == "byte" {
-			size = 1
-		} else {
-			p.errorf("expected 'word' or 'byte', got: %s", sizeText)
-			p.skipToEOL()
-			return
+		list = append(list, expr)
+		if p.lexer.Token() != TokComma {
+			break
 		}
-		// ok we have id, size ... wtf do we do now
-		p.last.AddFpLocal(id, size)
 		p.lexer.Next()
-	} else {
-		// define local label, associated to most recent global label
-		p.defineLocalLabel(tokenText)
 	}
-}
-
-// newFragment creates a new fragment with all pending labels and links it
-// into the linked list.
-func (p *Parser) newFragment(operation TokenType) *Statement {
-	fragment := &Statement{
-		file:          p.lexer.FileName(),
-		line:          p.lexer.Line(),
-		labels:        p.pendingLabels,
-		operation:     operation,
-		blockComment:  cleanComments(p.comments),
-		newlineBefore: p.eolCount > 1,
-	}
-	//fmt.Printf("for %s, got comments: %v, eolcount: %d\n", operation, fragment.blockComment, p.eolCount)
-	p.comments = nil
-	p.eolCount = 0
-	if p.first == nil {
-		p.first = fragment
-		p.last = fragment
-	} else {
-		p.last.next = fragment
-		p.last = fragment
-	}
-	p.pendingLabels = []string{}
-	return fragment
-}
-
-func cleanComments(s []string) []string {
-	clean := []string{}
-	for _, c := range s {
-		c = strings.TrimPrefix(c, "//")
-		c = strings.TrimPrefix(c, "/*")
-		c = strings.TrimSuffix(c, "*/")
-		sa := strings.Split(c, "\n")
-		for _, l := range sa {
-			clean = append(clean, l)
-		}
-	}
-	return clean
-}
-
-// newFragment creates a new fragment with all pending labels and links it
-// into the linked list.
-func (p *Parser) newEquate(id string) *Statement {
-	fragment := &Statement{
-		file:          p.lexer.FileName(),
-		line:          p.lexer.Line(),
-		labels:        []string{id},
-		operation:     TokEquals,
-		blockComment:  cleanComments(p.comments),
-		newlineBefore: p.eolCount > 1,
-	}
-	p.comments = nil
-	p.eolCount = 0
-	if p.first == nil {
-		p.first = fragment
-		p.last = fragment
-	} else {
-		p.last.next = fragment
-		p.last = fragment
-	}
-	return fragment
-}
-
-func (p *Parser) defineLabel(label string) {
-	p.label = label
-	p.pendingLabels = append(p.pendingLabels, label)
-}
-
-func (p *Parser) defineLocalLabel(text string) {
-	if len(p.label) == 0 {
-		p.errorf("can't define local '%s', no global in scope", text)
-	}
-	p.pendingLabels = append(p.pendingLabels, p.label+"."+text)
-}
-
-func (p *Parser) errorf(format string, a ...interface{}) {
-	s := fmt.Sprintf(format, a...)
-	p.messages.Error(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
-}
-
-func (p *Parser) warnf(format string, a ...interface{}) {
-	s := fmt.Sprintf(format, a...)
-	p.messages.Warn(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
-}
-
-func (p *Parser) infof(format string, a ...interface{}) {
-	s := fmt.Sprintf(format, a...)
-	p.messages.Info(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
+	return list
 }
 
 func (p *Parser) parseOperands() []*Operand {
@@ -394,6 +484,9 @@ func (p *Parser) parseOperand() *Operand {
 		p.expect(match)
 		p.lexer.Next()
 	}
+	if expr == nil {
+		return nil
+	}
 	return &Operand{
 		mode: mode,
 		expr: expr,
@@ -451,7 +544,7 @@ func (p *Parser) parseUnaryExpr() Expr {
 }
 
 //PrimaryExpr :=
-//      '(' expr ')'
+//      '(' origin ')'
 //    | Identifier
 //    | Literal (int, String, Char)
 func (p *Parser) parsePrimaryExpr() Expr {
@@ -463,7 +556,7 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		p.expect(TokRightParen)
 		p.lexer.Next()
 	case TokIdent:
-		expr = ExprIdent{ident: p.lexer.TokenText(), activeLabel: p.label}
+		expr = ExprIdent{ident: p.lexer.TokenText(), activeLabel: p.global}
 	case TokString:
 		s, err := strconv.Unquote(p.lexer.TokenText())
 		if err != nil {
@@ -486,30 +579,12 @@ func (p *Parser) parsePrimaryExpr() Expr {
 		// its not part of an expression, just leave it be
 		return expr
 		// some kind of error
-		//p.errorf("expected (expr), identifier, or literal (got %s)", p.lexer.Token())
-		//expr = IntLiteral{value: 0}
+		//p.errorf("expected (origin), identifier, or literal (got %s)", p.lexer.Token())
+		//origin = IntLiteral{value: 0}
 		// todo skip to eol?
 	}
 	p.lexer.Next()
 	return expr
-}
-
-func (p *Parser) expect(tokenType TokenType) {
-	if p.lexer.Token() != tokenType {
-		p.errorf("expected: %s, got: %s", tokenType, p.lexer.TokenText())
-	}
-}
-
-func (p *Parser) PrintErrors() {
-	p.messages.Print()
-}
-
-func (p *Parser) HasErrors() bool {
-	return p.messages.errors > 0
-}
-
-func (p *Parser) Fragments() *Statement {
-	return p.first
 }
 
 // todo: use iota marker values and simple range compares for these

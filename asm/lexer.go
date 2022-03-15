@@ -69,6 +69,7 @@ const (
 	TokHlt
 	TokFunction
 	TokImport
+	TokVar
 	TokComment
 	TokEOL
 )
@@ -87,7 +88,7 @@ var tokenImage = []string{
 	"jlt", "inc", "dec", "jsr", "ret",
 	"clc", "sec", "clb", "seb", "jcc",
 	"jcs", "sav", "rst", "hlt", "function()",
-	"import", "<comment>", "<eol>",
+	"import", "var", "<comment>", "<eol>",
 }
 
 func (t TokenType) String() string {
@@ -195,7 +196,7 @@ func (l *Lexer) FileName() string {
 }
 
 func (l *Lexer) Line() int {
-	return l.line
+	return l.s.Line
 }
 
 func (l *Lexer) Column() int {

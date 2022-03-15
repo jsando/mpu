@@ -8,68 +8,82 @@ import (
 )
 
 type Linker struct {
-	fragment *Statement
-	symbols  *SymbolTable
-	messages *Messages
-	function *Statement // Pointer to statement if in function with automatic fp/sav/rst handling
-	pc       int
-	code     []byte
-	patches  []patch
+	statements Statement
+	symbols    *SymbolTable
+	messages   *Messages
+	function   *FunctionStatement // Pointer to statement if in function with automatic fp/sav/rst handling
+	pc         int
+	code       []byte
+	patches    []patch
 }
 
 // patch is a expression with a forward reference to be resoled on pass 2
 type patch struct {
-	fragment *Statement
-	expr     Expr
-	pc       int
-	size     int // 1 = byte, 2 = word
+	statement  Statement
+	expr       Expr
+	offsetByte bool
+	pc         int
+	size       int // 1 = byte, 2 = word
 }
 
-func NewLinker(fragment *Statement) *Linker {
+func NewLinker(stmt Statement) *Linker {
 	return &Linker{
-		fragment: fragment,
-		symbols:  NewSymbolTable(),
-		messages: &Messages{},
-		code:     make([]byte, 65536),
+		statements: stmt,
+		symbols:    NewSymbolTable(),
+		messages:   &Messages{},
+		code:       make([]byte, 65536),
 	}
 }
 
 // Link uses two passes to try to resolve all references and generate code into l.code.
 func (l *Linker) Link() {
-	for frag := l.fragment; frag != nil; frag = frag.next {
-		frag.pcStart = l.pc
-		l.overrideFramePointerSymbols(frag)
-		switch frag.operation {
-		case TokEquals:
-			l.doEquate(frag)
-		case TokOrg:
-			l.doOrg(frag)
-		case TokDw:
-			l.doDefineWord(frag)
-		case TokDb:
-			l.doDefineByte(frag)
-		case TokDs:
-			l.doDefineSpace(frag)
-		case TokSec, TokClc, TokSeb, TokClb, TokRet, TokRst, TokHlt:
-			l.doEmit0Operand(frag)
-		case TokAdd, TokSub, TokMul, TokDiv, TokCmp, TokAnd, TokOr, TokXor, TokCpy:
-			l.doEmit2Operand(frag)
-		case TokJmp, TokJsr:
-			l.doEmitAbsJump(frag)
-		case TokJeq, TokJne, TokJge, TokJlt, TokJcc, TokJcs:
-			l.doEmitRelJump(frag)
-		case TokInc, TokDec, TokPsh, TokPop, TokSav:
-			l.doEmit1Operand(frag)
-		case TokFunction:
-			l.doFunction(frag)
+	for stmt := l.statements; stmt != nil; stmt = stmt.Next() {
+		stmt.SetPcStart(l.pc)
+		switch t := stmt.(type) {
+		case *EquateStatement:
+			l.doEquate(t)
+		case *DefineByteStatement:
+			l.doDefineByte(t)
+		case *DefineWordStatement:
+			l.doDefineWord(t)
+		case *DefineSpaceStatement:
+			l.doDefineSpace(t)
+		case *ImportStatement:
+			// nothing to do
+		case *OrgStatement:
+			l.doOrg(t)
+		case *LabelStatement:
+			l.defineLabel(t, t.name)
+		case *FunctionStatement:
+			l.doFunction(t)
+		case *VarStatement:
+			// nothing to do, they are appended to the FunctionStatement
+		case *InstructionStatement:
+			l.overrideFramePointerSymbols(t)
+			switch t.operation {
+			case TokSec, TokClc, TokSeb, TokClb, TokRet, TokRst, TokHlt:
+				l.doEmit0Operand(t)
+			case TokAdd, TokSub, TokMul, TokDiv, TokCmp, TokAnd, TokOr, TokXor, TokCpy:
+				l.doEmit2Operand(t)
+			case TokJmp, TokJsr:
+				l.doEmitAbsJump(t)
+			case TokJeq, TokJne, TokJge, TokJlt, TokJcc, TokJcs:
+				l.doEmitRelJump(t)
+			case TokInc, TokDec, TokPsh, TokPop, TokSav:
+				l.doEmit1Operand(t)
+			default:
+				panic("illegal opcode")
+			}
+		default:
+			panic("unknown statement type")
 		}
-		frag.pcEnd = l.pc
+		stmt.SetPcEnd(l.pc)
 	}
 	for _, patch := range l.patches {
 		ival, _, res := patch.expr.computeValue(l.symbols)
 		if res {
 			if patch.size == 1 {
-				if patch.fragment.operands[0].mode == machine.OffsetByte {
+				if patch.offsetByte {
 					ival = ival - patch.pc + 1
 				}
 				l.writeByteAt(ival, patch.pc)
@@ -79,17 +93,22 @@ func (l *Linker) Link() {
 				panic("invalid patch size")
 			}
 		} else {
-			l.errorf(patch.fragment, "expression still unresolved after second pass")
+			l.errorf(patch.statement, "expression still unresolved after second pass")
 		}
 	}
+	//fmt.Printf("ast dump:\n")
+	//for stmt := l.statements; stmt != nil; stmt = stmt.Next() {
+	//	fmt.Printf("%v\n", stmt)
+	//}
 }
 
-func (l *Linker) addPatch(frag *Statement, expr Expr, size int) {
+func (l *Linker) addPatch(stmt Statement, expr Expr, size int, offsetByte bool) {
 	p := patch{
-		fragment: frag,
-		expr:     expr,
-		pc:       l.pc,
-		size:     size,
+		statement:  stmt,
+		expr:       expr,
+		pc:         l.pc,
+		size:       size,
+		offsetByte: offsetByte,
 	}
 	l.patches = append(l.patches, p)
 	for i := 0; i < size; i++ {
@@ -97,27 +116,26 @@ func (l *Linker) addPatch(frag *Statement, expr Expr, size int) {
 	}
 }
 
-func (l *Linker) defineLabels(frag *Statement) {
-	// todo check we aren't redefining symbols
+func (l *Linker) defineLabel(s Statement, name string) {
 	global := false
-	for _, label := range frag.labels {
-		if l.isErrorDefined(frag, label) {
-			return
-		}
-		l.symbols.AddSymbol(frag.file, frag.line, label)
-		l.symbols.Define(label, l.pc)
-		if !strings.ContainsAny(label, ".") {
-			global = true
-		}
+	//for _, s := range s.labels {
+	if l.isErrorDefined(s, name) {
+		return
 	}
+	l.symbols.AddSymbol(s.File(), s.Line(), name)
+	l.symbols.Define(name, l.pc)
+	if !strings.ContainsAny(name, ".") {
+		global = true
+	}
+	//}
 	if global {
 		l.function = nil
 	}
 }
 
-func (l *Linker) errorf(frag *Statement, format string, args ...interface{}) {
+func (l *Linker) errorf(stmt Statement, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	l.messages.Error(frag.file, frag.line, 0, msg)
+	l.messages.Error(stmt.File(), stmt.Line(), 0, msg)
 }
 
 func (l *Linker) writeByte(val int) {
@@ -152,64 +170,51 @@ func (l *Linker) writeWordAt(val int, pc int) {
 	l.code[pc+1] = hi
 }
 
-func (l *Linker) doEquate(frag *Statement) {
-	if len(frag.labels) != 1 {
-		l.errorf(frag, "equate must have exactly one label")
-	}
-	if l.isErrorDefined(frag, frag.labels[0]) {
+func (l *Linker) doEquate(equate *EquateStatement) {
+	if l.isErrorDefined(equate, equate.name) {
 		return
 	}
-	l.symbols.AddSymbol(frag.file, frag.line, frag.labels[0])
-	ival, _, res := frag.operands[0].expr.computeValue(l.symbols) // todo equate must have 1 arg
+	l.symbols.AddSymbol(equate.file, equate.line, equate.name)
+	ival, _, res := equate.value.computeValue(l.symbols)
 	if !res {
-		l.errorf(frag, "equate must have constant value")
+		l.errorf(equate, "equate must have constant value")
 	}
-	l.symbols.Define(frag.labels[0], ival)
+	l.symbols.Define(equate.name, ival)
 }
 
-func (l *Linker) doOrg(frag *Statement) {
+func (l *Linker) doOrg(org *OrgStatement) {
 	// org bumps to PC to a new location.  Error to go backwards.
-	ival, _, res := frag.operands[0].expr.computeValue(l.symbols) // todo equate must have 1 arg
+	ival, _, res := org.origin.computeValue(l.symbols)
 	if !res {
-		l.errorf(frag, "org must have constant value")
+		l.errorf(org, "org must have constant value")
 	} else {
 		if l.pc > ival {
-			l.errorf(frag, "pc already at %d, can't set back to %d", l.pc, ival)
+			l.errorf(org, "pc already at %d, can't set back to %d", l.pc, ival)
 		} else {
 			l.pc = ival
 		}
 	}
 }
 
-func (l *Linker) doDefineWord(frag *Statement) {
-	l.defineLabels(frag)
-	for _, operand := range frag.operands {
-		if operand.mode != machine.Absolute {
-			l.errorf(frag, "illegal operand mode for dw")
-			return
-		}
-		ival, bval, res := operand.expr.computeValue(l.symbols)
+func (l *Linker) doDefineWord(dw *DefineWordStatement) {
+	for _, expr := range dw.values {
+		ival, bval, res := expr.computeValue(l.symbols)
 		if res {
 			if bval != nil {
 				// todo: does it even make sense to write a string in lo/hi byte order???? I say no.
-				l.errorf(frag, "can't use string with dw")
+				l.errorf(dw, "can't use string with dw")
 			} else {
 				l.writeWord(ival)
 			}
 		} else {
-			l.addPatch(frag, operand.expr, 2)
+			l.addPatch(dw, expr, 2, false)
 		}
 	}
 }
 
-func (l *Linker) doDefineByte(frag *Statement) {
-	l.defineLabels(frag)
-	for _, operand := range frag.operands {
-		if operand.mode != machine.Absolute {
-			l.errorf(frag, "illegal operand mode for db")
-			return
-		}
-		ival, bval, res := operand.expr.computeValue(l.symbols)
+func (l *Linker) doDefineByte(db *DefineByteStatement) {
+	for _, expr := range db.values {
+		ival, bval, res := expr.computeValue(l.symbols)
 		if res {
 			if bval != nil {
 				l.writeBytes(bval)
@@ -217,29 +222,19 @@ func (l *Linker) doDefineByte(frag *Statement) {
 				l.writeByte(ival)
 			}
 		} else {
-			l.addPatch(frag, operand.expr, 1)
+			l.addPatch(db, expr, 1, false)
 		}
 	}
 }
 
-func (l *Linker) doDefineSpace(frag *Statement) {
-	l.defineLabels(frag)
-	if len(frag.operands) != 1 {
-		l.errorf(frag, "ds requires a single operand")
-		return
-	}
-	operand := frag.operands[0]
-	if operand.mode != machine.Absolute {
-		l.errorf(frag, "invalid operand for ds")
-		return
-	}
-	ival, bval, res := operand.expr.computeValue(l.symbols)
+func (l *Linker) doDefineSpace(ds *DefineSpaceStatement) {
+	ival, bval, res := ds.size.computeValue(l.symbols)
 	if !res {
-		l.errorf(frag, "illegal forward reference in ds")
+		l.errorf(ds, "illegal forward reference in ds")
 		return
 	}
 	if bval != nil {
-		l.errorf(frag, "ds requires int param")
+		l.errorf(ds, "ds requires int param")
 	}
 	for i := 0; i < ival; i++ {
 		l.writeByte(0)
@@ -255,37 +250,33 @@ func (l *Linker) doDefineSpace(frag *Statement) {
  *	 		local-1		fp-2
  *	 sp --> local-2		fp-4
  */
-func (l *Linker) doFunction(frag *Statement) {
+func (l *Linker) doFunction(fn *FunctionStatement) {
 	// define any labels, esp the global label for this function.
 	// it will emit a SAV at this address to make space for locals.
-	l.defineLabels(frag)
-	l.function = frag
-
-	if len(frag.labels) != 1 {
-		l.errorf(frag, "function must have only one associated label: %v", frag.labels)
-	}
+	l.defineLabel(fn, fn.name)
+	l.function = fn
 
 	// compute the fp offset for all params and locals and
 	// add them to the symbol table
 	offset := 0
 	localSize := 0
-	for _, local := range frag.fpLocals {
+	for _, local := range fn.fpLocals {
 		localSize += local.size
 		offset -= local.size
 		local.offset = offset
 		if offset < -128 {
-			l.errorf(frag, "fp local offset out of range (-1,-128): %d", offset)
+			l.errorf(fn, "fp local offset out of range (-1,-128): %d", offset)
 		}
-		l.symbols.AddFpSymbol(frag.file, frag.line, local.id, local.offset)
+		l.symbols.AddFpSymbol(fn.file, fn.line, local.id, local.offset)
 	}
 	offset = 4
-	for i := len(frag.fpArgs) - 1; i >= 0; i-- {
-		arg := frag.fpArgs[i]
+	for i := len(fn.fpArgs) - 1; i >= 0; i-- {
+		arg := fn.fpArgs[i]
 		arg.offset = offset
 		if offset > 127 {
-			l.errorf(frag, "fp arg offset out of range (0,127): %d", offset)
+			l.errorf(fn, "fp arg offset out of range (0,127): %d", offset)
 		}
-		l.symbols.AddFpSymbol(frag.file, frag.line, arg.id, arg.offset)
+		l.symbols.AddFpSymbol(fn.file, fn.line, arg.id, arg.offset)
 		offset += arg.size
 	}
 	opCode := machine.EncodeOp(machine.Sav, machine.ImmediateByte, machine.Implied)
@@ -293,31 +284,29 @@ func (l *Linker) doFunction(frag *Statement) {
 	l.writeByte(localSize)
 }
 
-func (l *Linker) doEmit2Operand(frag *Statement) {
-	l.defineLabels(frag)
-	if len(frag.operands) != 2 {
-		l.errorf(frag, "expected 2 operands")
+func (l *Linker) doEmit2Operand(stmt *InstructionStatement) {
+	if len(stmt.operands) != 2 {
+		l.errorf(stmt, "expected 2 operands")
 		return
 	}
-	op1 := frag.operands[0]
-	op2 := frag.operands[1]
-	op := tokToOp(frag.operation)
+	op1 := stmt.operands[0]
+	op2 := stmt.operands[1]
+	op := tokToOp(stmt.operation)
 	opCode := machine.EncodeOp(op, op1.mode, op2.mode)
 	l.writeByte(int(opCode))
-	l.resolveWordOperand(frag, op1)
-	l.resolveWordOperand(frag, op2)
+	l.resolveWordOperand(stmt, op1)
+	l.resolveWordOperand(stmt, op2)
 }
 
-func (l *Linker) doEmit1Operand(frag *Statement) {
-	l.defineLabels(frag)
-	if len(frag.operands) != 1 {
-		l.errorf(frag, "expected 1 operand")
+func (l *Linker) doEmit1Operand(ins *InstructionStatement) {
+	if len(ins.operands) != 1 {
+		l.errorf(ins, "expected 1 operand")
 		return
 	}
-	op1 := frag.operands[0]
-	op := tokToOp(frag.operation)
+	op1 := ins.operands[0]
+	op := tokToOp(ins.operation)
 	if l.function != nil && op == machine.Sav {
-		l.errorf(frag, "within functions, asm generates automatic SAV")
+		l.errorf(ins, "within functions, asm generates automatic SAV")
 		return
 	}
 	if op == machine.Pop && op1.mode == machine.Immediate {
@@ -325,35 +314,34 @@ func (l *Linker) doEmit1Operand(frag *Statement) {
 	}
 	opCode := machine.EncodeOp(op, op1.mode, machine.Implied)
 	l.writeByte(int(opCode))
-	l.resolveWordOperand(frag, op1)
+	l.resolveWordOperand(ins, op1)
 }
 
-func (l *Linker) doEmitAbsJump(frag *Statement) {
-	if len(frag.operands) != 1 {
-		l.errorf(frag, "expected 1 operand")
+func (l *Linker) doEmitAbsJump(ins *InstructionStatement) {
+	if len(ins.operands) != 1 {
+		l.errorf(ins, "expected 1 operand")
 		return
 	}
 	// override so we don't need # on all jumps
-	frag.operands[0].mode = machine.Immediate
-	l.doEmit1Operand(frag)
+	ins.operands[0].mode = machine.Immediate
+	l.doEmit1Operand(ins)
 }
 
-func (l *Linker) doEmitRelJump(frag *Statement) {
-	if len(frag.operands) != 1 {
-		l.errorf(frag, "expected 1 operand")
+func (l *Linker) doEmitRelJump(stmt *InstructionStatement) {
+	if len(stmt.operands) != 1 {
+		l.errorf(stmt, "expected 1 operand")
 		return
 	}
-	frag.operands[0].mode = machine.OffsetByte
-	l.doEmit1Operand(frag)
+	stmt.operands[0].mode = machine.OffsetByte
+	l.doEmit1Operand(stmt)
 }
 
-func (l *Linker) doEmit0Operand(frag *Statement) {
-	l.defineLabels(frag)
-	if len(frag.operands) != 0 {
-		l.errorf(frag, "expected 0 operands, got %d", len(frag.operands))
+func (l *Linker) doEmit0Operand(stmt *InstructionStatement) {
+	if len(stmt.operands) != 0 {
+		l.errorf(stmt, "expected 0 operands, got %d", len(stmt.operands))
 		return
 	}
-	op := tokToOp(frag.operation)
+	op := tokToOp(stmt.operation)
 	if l.function != nil && op == machine.Ret {
 		op = machine.Rst
 	}
@@ -361,7 +349,7 @@ func (l *Linker) doEmit0Operand(frag *Statement) {
 	l.writeByte(int(opCode))
 }
 
-func (l *Linker) resolveWordOperand(frag *Statement, op *Operand) {
+func (l *Linker) resolveWordOperand(ins *InstructionStatement, op *Operand) {
 	// technically I want ImmediateByte to be an unsigned int but ... ok for now to make them all int8
 	byteOp := false
 	switch op.mode {
@@ -371,7 +359,7 @@ func (l *Linker) resolveWordOperand(frag *Statement, op *Operand) {
 	ival, bval, res := op.expr.computeValue(l.symbols)
 	if res {
 		if bval != nil {
-			l.errorf(frag, "expected int value, not []byte")
+			l.errorf(ins, "expected int value, not []byte")
 			return
 		}
 		if byteOp {
@@ -379,7 +367,7 @@ func (l *Linker) resolveWordOperand(frag *Statement, op *Operand) {
 				ival = ival - l.pc + 1
 
 				if ival > 127 || ival < -128 {
-					l.errorf(frag, "relative offset out of range: %d", ival)
+					l.errorf(ins, "relative offset out of range: %d", ival)
 				}
 			}
 			l.writeByte(ival)
@@ -388,15 +376,15 @@ func (l *Linker) resolveWordOperand(frag *Statement, op *Operand) {
 		}
 	} else {
 		if byteOp {
-			l.addPatch(frag, op.expr, 1)
+			l.addPatch(ins, op.expr, 1, op.mode == machine.OffsetByte)
 		} else {
-			l.addPatch(frag, op.expr, 2)
+			l.addPatch(ins, op.expr, 2, false)
 		}
 	}
 }
 
-func (l *Linker) BytesFor(frag *Statement) []byte {
-	return l.code[frag.pcStart:frag.pcEnd]
+func (l *Linker) BytesFor(stmt Statement) []byte {
+	return l.code[stmt.PcStart():stmt.PcEnd()]
 }
 
 func (l *Linker) PrintMessages() {
@@ -411,9 +399,12 @@ func (l *Linker) Code() []byte {
 	return l.code[0 : l.pc+1]
 }
 
-func (l *Linker) overrideFramePointerSymbols(frag *Statement) {
-	for _, op := range frag.operands {
+func (l *Linker) overrideFramePointerSymbols(ins *InstructionStatement) {
+	for _, op := range ins.operands {
 		if op.mode == machine.Absolute {
+			if op.expr == nil {
+				fmt.Printf("nil expr from %s:%d in op %s\n", ins.file, ins.line, ins.operation)
+			}
 			if op.expr.hasFramePointerSymbols(l.symbols) {
 				op.mode = machine.Relative
 			}
@@ -425,7 +416,7 @@ func (l *Linker) overrideFramePointerSymbols(frag *Statement) {
 	}
 }
 
-func (l *Linker) isErrorDefined(stmt *Statement, id string) bool {
+func (l *Linker) isErrorDefined(stmt Statement, id string) bool {
 	s := l.symbols.GetSymbol(id)
 	if s != nil {
 		l.errorf(stmt, "attempt to redefine '%s', already defined by %s:%d", s.text, s.file, s.line)

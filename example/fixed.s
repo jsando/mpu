@@ -1,3 +1,5 @@
+// Testing 12.4 fixed point math, with a print routine to debug.
+
             import "stdio"
             import "sqrt"
 
@@ -8,8 +10,8 @@
 
 
 main():
-    .a local word
-    .b local word
+    var a word
+    var b word
 
             psh #0
             cpy a, #0b0010_1000
@@ -22,8 +24,8 @@ main():
             hlt
 
 printfp(value word):
-            .t1 local word
-            .fraction local word
+            var t1 word
+            var fraction word
 
             cpy t1, value
             div t1, #16

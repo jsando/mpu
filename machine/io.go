@@ -102,5 +102,5 @@ func (d *IODispatcher) GetWord(addr uint16) uint16 {
 }
 
 func LogIOError(format string, a ...interface{}) {
-	_, _ = fmt.Fprintf(os.Stderr, format, a)
+	_, _ = fmt.Fprintf(os.Stderr, format, a...)
 }

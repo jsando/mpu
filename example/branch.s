@@ -9,7 +9,7 @@ main:
     db 0
 
 fill_memory(start word, end word, value word):
-    .ptr local word
+    var ptr word
 
     cpy ptr, start
 .loop

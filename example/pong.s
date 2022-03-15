@@ -1,17 +1,19 @@
 //-------------------------------------
 // MPU PONG
 //-------------------------------------
-
-// TODO
-//   Make y vector depend on where it hits paddle (-n if near top, 0 if middle, n if bottom)
-//   Increase velocity as game progresses
+// Improvements:
+//  Make y vector depend on where it hits paddle (-n if near top, 0 if middle, n if bottom)
+//  Ensure dy=0 doesn't happen, otherwise ball just bounces back and forth with no play
+//  Add sound
+//  Increase velocity as game progresses
+//  Use fixed point for ball for more realistic motion / bounce
 
             import "random"
             import "lcd"
             import "strconv"
 
-// The initial program counter needs to point to the entry point at startup.
-// The rest of the special mem area ($00-$0f) can be left zero on startup.
+                // The initial program counter needs to point to the entry point at startup.
+                // The rest of the special mem area ($00-$0f) can be left zero on startup.
             org 0
 REG_PC:     dw main
 REG_SP:     dw 0
@@ -373,7 +375,7 @@ DrawPlayer2Paddle():
 // InitBall
 //
 InitBall():
-    .isLeft local word
+    var isLeft word
             // Start in center of screen
             cpy ball_x, #SCREEN_WIDTH / 2
             cpy ball_y, #SCREEN_HEIGHT / 2
@@ -411,7 +413,7 @@ InitBall():
 // Draw ball.
 //
 DrawBall():
-    .trash local word
+    var trash word
             // Set draw color to white
             cpy REG_IO_REQ, #color
 
@@ -475,7 +477,7 @@ DrawBall():
 // Game over when one player hits at least 11 and is +2 over the other player.
 //
 IsGameOver():
-    .t1 local word
+    var t1 word
             cmp player1_score, player2_score
             jlt player2Higher
 
@@ -499,7 +501,7 @@ IsGameOver():
             ret
 
 BounceBall():
-            .overlap local word
+            var overlap word
 
             // See if the ball is hitting player1 paddle, but only if its going in that direction
             cmp ball_xspeed, #0
@@ -547,7 +549,7 @@ BounceBall():
 // Player 2 is automatic.
 //
 Player2AI():
-    .middle local word
+    var middle word
             cpy middle, player2_paddle_y
             clc
             add middle, #(PADDLE_HEIGHT / 2)
@@ -571,10 +573,10 @@ Player2AI():
 // Determine if two rectanges are overlapping.
 //
 Overlap(overlap word, x1 word, y1 word, w1 word, h1 word, x2 word, y2 word, w2 word, h2 word):
-            .right1     local word
-            .bottom1    local word
-            .right2     local word
-            .bottom2    local word
+            var right1      word
+            var bottom1     word
+            var right2      word
+            var bottom2     word
 
             cpy overlap, #0     // default to no overlap
             clc                 // compute bottom/right edges
@@ -606,7 +608,7 @@ Overlap(overlap word, x1 word, y1 word, w1 word, h1 word, x2 word, y2 word, w2 w
 // DrawScore
 //
 DrawScore():
-    .score local word
+    var score word
             cpy tx, #SCREEN_WIDTH/4
             cpy ty, #5
             psh player1_score

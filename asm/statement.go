@@ -3,51 +3,169 @@ package asm
 import (
 	"fmt"
 	"github.com/jsando/mpu/machine"
-	"strings"
 )
 
-// Statement represents a single directive or instruction.
-// They form a linked list.
-// The parser uses the lexer to create the list of statements,
-// which are then fed to the linker to generate the machine code.
-type Statement struct {
-	next          *Statement
-	file          string
-	line          int
-	labels        []string  //optional labels
-	operation     TokenType // TokXXX constant for a directive or opcode
-	operands      []*Operand
-	pcStart       int
-	pcEnd         int
-	fpArgs        []*FpParam
-	fpLocals      []*FpParam
-	newlineBefore bool
-	blockComment  []string
-	eolComment    string
+type (
+	// Node defines the common fields that all statements share.
+	Node struct {
+		next          Statement
+		file          string
+		line          int
+		newlineBefore bool
+		blockComment  []string
+		eolComment    string
+		pcStart       int // assigned by the linker
+		pcEnd         int
+	}
+
+	// Statement is an interface of Node just so all my types can implement the same interface?
+	Statement interface {
+		Next() Statement
+		SetNext(next Statement)
+		File() string
+		SetFile(file string)
+		Line() int
+		SetLine(line int)
+		NewlineBefore() bool
+		SetNewlineBefore(newlineBefore bool)
+		BlockComment() []string
+		SetBlockComment(blockComment []string)
+		EolComment() string
+		SetEolComment(eolComment string)
+		PcStart() int
+		SetPcStart(pcStart int)
+		PcEnd() int
+		SetPcEnd(pcEnd int)
+	}
+
+	LabelStatement struct {
+		Node
+		name string
+	}
+
+	EquateStatement struct {
+		Node
+		name  string
+		value Expr
+	}
+
+	DefineByteStatement struct {
+		Node
+		values []Expr
+	}
+
+	DefineWordStatement struct {
+		Node
+		values []Expr
+	}
+
+	DefineSpaceStatement struct {
+		Node
+		size Expr
+	}
+
+	OrgStatement struct {
+		Node
+		origin Expr
+	}
+
+	ImportStatement struct {
+		Node
+		path string
+	}
+
+	InstructionStatement struct {
+		Node
+		operation TokenType // TokXXX constant for a directive or opcode
+		operands  []*Operand
+	}
+
+	FunctionStatement struct {
+		Node
+		name     string
+		fpArgs   []*FpParam
+		fpLocals []*FpParam
+	}
+
+	VarStatement struct {
+		Node
+		name string
+		size int
+	}
+)
+
+func (n *Node) String() string {
+	return fmt.Sprintf("%s: %d pc (%d-%d)\n", n.file, n.line, n.pcStart, n.pcEnd)
+}
+
+func (n *Node) Next() Statement {
+	return n.next
+}
+
+func (n *Node) SetNext(next Statement) {
+	n.next = next
+}
+
+func (n *Node) File() string {
+	return n.file
+}
+
+func (n *Node) SetFile(file string) {
+	n.file = file
+}
+
+func (n *Node) Line() int {
+	return n.line
+}
+
+func (n *Node) SetLine(line int) {
+	n.line = line
+}
+
+func (n *Node) NewlineBefore() bool {
+	return n.newlineBefore
+}
+
+func (n *Node) SetNewlineBefore(newlineBefore bool) {
+	n.newlineBefore = newlineBefore
+}
+
+func (n *Node) BlockComment() []string {
+	return n.blockComment
+}
+
+func (n *Node) SetBlockComment(blockComment []string) {
+	n.blockComment = blockComment
+}
+
+func (n *Node) EolComment() string {
+	return n.eolComment
+}
+
+func (n *Node) SetEolComment(eolComment string) {
+	n.eolComment = eolComment
+}
+
+func (n *Node) PcStart() int {
+	return n.pcStart
+}
+
+func (n *Node) SetPcStart(pcStart int) {
+	n.pcStart = pcStart
+}
+
+func (n *Node) PcEnd() int {
+	return n.pcEnd
+}
+
+func (n *Node) SetPcEnd(pcEnd int) {
+	n.pcEnd = pcEnd
 }
 
 type FpParam struct {
 	id     string
 	size   int
 	offset int // offset once assigned
-}
-
-func (f *Statement) AddFpArg(id string, size int) {
-	f.fpArgs = append(f.fpArgs, &FpParam{
-		id:   id,
-		size: size,
-	})
-}
-
-func (f *Statement) AddFpLocal(id string, size int) {
-	f.fpLocals = append(f.fpLocals, &FpParam{
-		id:   id,
-		size: size,
-	})
-}
-
-func (f *Statement) String() string {
-	return fmt.Sprintf("%s: %s", strings.Join(f.labels, ","), f.operation)
 }
 
 type Operand struct {

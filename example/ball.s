@@ -1,3 +1,8 @@
+// After seeing how horrible the pong game is using integer dx/dy
+// this was a quick test at using 12.4 fixed point values to represent
+// dx/dy as vectors with a separate speed, and normalizing
+// the vector.
+
             import "random"
             import "stdio"
             import "sqrt"
@@ -151,7 +156,7 @@ DrawScreen():
 // InitBall
 //
 InitBall():
-    .isLeft local word
+    var isLeft word
             // Start in center of screen
             cpy ball_x, #SCREEN_WIDTH / 2
             cpy ball_y, #SCREEN_HEIGHT / 2
@@ -189,9 +194,9 @@ InitBall():
 //      y *= length
 //  }
 BallVectNormalize():
-            .t1 local word
-            .t2 local word
-            .length local word
+            var t1 word
+            var t2 word
+            var length word
 
             cpy t1, ball_dx
             mul t1, t1
@@ -223,7 +228,7 @@ BallVectNormalize():
 // Draw ball.
 //
 DrawBall():
-            .t1 local word
+            var t1 word
 
             // Set draw color to white
             cpy REG_IO_REQ, #color

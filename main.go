@@ -64,13 +64,14 @@ func format(inputs []*os.File, rewrite bool) {
 	}
 	lexer := asm.NewLexer(inputs[0].Name(), inputs[0])
 	parser := asm.NewParser(asm.NewInput([]asm.TokenReader{lexer}))
+	parser.SetProcessImport(false)
 	parser.Parse()
 	parser.PrintErrors()
 	if parser.HasErrors() {
 		os.Exit(1)
 	}
 	p := asm.NewPrinter(os.Stdout)
-	p.Print(parser.Fragments())
+	p.Print(parser.Statements())
 }
 
 func getInputs(flagSet *flag.FlagSet) []*os.File {
@@ -148,7 +149,7 @@ func compile(inputs []*os.File) (*asm.Linker, []string) {
 	if parser.HasErrors() {
 		os.Exit(1)
 	}
-	linker := asm.NewLinker(parser.Fragments())
+	linker := asm.NewLinker(parser.Statements())
 	linker.Link()
 	linker.PrintMessages()
 	if linker.HasErrors() {
