@@ -2,3 +2,4 @@ mpu
 .idea/
 etc/*.bin
 .DS_Store
+.vscode/
