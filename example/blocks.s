@@ -1,4 +1,4 @@
-// this is a fully functional tetris clone for mpu
+// Falling blocks game
 
             import "random"
             import "lcd"

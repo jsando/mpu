@@ -91,18 +91,45 @@ To run any of the examples use "./mpu run example/name".
 
 Here are some of the graphics examples.
 
-From example/graphics.s -
+## Drawing random filled rectangles 
+
+```
+./mpu run example/graphics.s
+```
+Press ctrl-c in terminal to quit.
 ![Screenshot from example/graphics.s](images/graphics.jpeg)
 
-From example/lcd_test.s -
+## 16-Segment LCD Display Font
+
+```
+./mpu run example/lcd_test.s
+```
+Press esc to quit.
 ![Screenshot from example/lcd_test.s](images/lcd.jpeg)
 
-From example/pong.s -
+## Pong Game
+
+```
+./mpu run example/pong.s
+```
+Press esc to quit.  
+Press '1' for 1 player, '2' for 2 player.  
+Player 1 controls are 'a' and 'z'.
+Player 2 controls are 'l' and ','.
 ![Screenshot from example/pong.s](images/pong.jpeg)
 
-From example/blocks.s -
-![Screenshot from example/blocks.s](images/blocks.jpeg)
+## Falling Blocks Game
 
+```
+./mpu run example/blocks.s
+```
+Press esc to quit.  
+Press space to start new game.
+Press 'j' to move left.
+Press 'l' to move right.
+Press space to rotate piece.
+Press 'k' to drop fast.
+![Screenshot from example/blocks.s](images/blocks.jpeg)
 
 # MPU Specification
 
