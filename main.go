@@ -20,62 +20,175 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jsando/mpu/asm"
 	"github.com/jsando/mpu/machine"
 )
 
+const version = "1.0.0"
+
 func main() {
-	//var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	buildCmd := flag.NewFlagSet("build", flag.ExitOnError)
-	outputFile := buildCmd.String("o", "", "Output file")
+	// Handle version and help flags before subcommands
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--version", "-v":
+			fmt.Printf("mpu version %s\n", version)
+			os.Exit(0)
+		case "--help", "-h", "help":
+			printUsage()
+			os.Exit(0)
+		}
+	}
 
-	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
-	sysmon := runCmd.Bool("m", false, "Open system monitor")
+	buildCmd := flag.NewFlagSet("build", flag.ContinueOnError)
+	outputFile := buildCmd.String("o", "", "output file (default: input.bin)")
+	buildHelp := buildCmd.Bool("help", false, "show help for build command")
 
-	fmtCmd := flag.NewFlagSet("fmt", flag.ExitOnError)
-	rewrite := fmtCmd.Bool("w", false, "Rewrite original file")
+	runCmd := flag.NewFlagSet("run", flag.ContinueOnError)
+	sysmon := runCmd.Bool("m", false, "open system monitor/debugger")
+	runHelp := runCmd.Bool("help", false, "show help for run command")
 
-	//if *cpuprofile != "" {
-	//	f, err := os.Create(*cpuprofile)
-	//	if err != nil {
-	//		log.Fatal(err)
-	//	}
-	//	pprof.StartCPUProfile(f)
-	//	defer pprof.StopCPUProfile()
-	//}
+	fmtCmd := flag.NewFlagSet("fmt", flag.ContinueOnError)
+	rewrite := fmtCmd.Bool("w", false, "rewrite original file (not yet implemented)")
+	fmtHelp := fmtCmd.Bool("help", false, "show help for fmt command")
+
+	// Custom usage for subcommands
+	buildCmd.Usage = func() { printBuildUsage() }
+	runCmd.Usage = func() { printRunUsage() }
+	fmtCmd.Usage = func() { printFmtUsage() }
+
 	if len(os.Args) <= 1 {
-		flag.Usage()
+		printUsage()
 		os.Exit(1)
 	}
+
 	switch os.Args[1] {
 	case "build":
-		buildCmd.Parse(os.Args[2:])
+		if err := buildCmd.Parse(os.Args[2:]); err != nil {
+			os.Exit(1)
+		}
+		if *buildHelp {
+			printBuildUsage()
+			os.Exit(0)
+		}
 		inputs := getInputs(buildCmd)
 		var output = *outputFile
 		if output == "" {
 			file := inputs[0]
-			output = file.Name()[:len(file.Name())-2] + ".bin"
+			output = strings.TrimSuffix(file.Name(), filepath.Ext(file.Name())) + ".bin"
 		}
 		build(inputs, output)
 	case "run":
-		runCmd.Parse(os.Args[2:])
+		if err := runCmd.Parse(os.Args[2:]); err != nil {
+			os.Exit(1)
+		}
+		if *runHelp {
+			printRunUsage()
+			os.Exit(0)
+		}
 		inputs := getInputs(runCmd)
 		run(inputs, *sysmon)
 	case "fmt":
-		fmtCmd.Parse(os.Args[2:])
+		if err := fmtCmd.Parse(os.Args[2:]); err != nil {
+			os.Exit(1)
+		}
+		if *fmtHelp {
+			printFmtUsage()
+			os.Exit(0)
+		}
 		inputs := getInputs(fmtCmd)
 		format(inputs, *rewrite)
 	default:
-		fmt.Println("expected 'build' or 'run' command")
+		fmt.Fprintf(os.Stderr, "Error: unknown command '%s'\n\n", os.Args[1])
+		printUsage()
 		os.Exit(1)
 	}
 }
 
+func printUsage() {
+	fmt.Println("MPU - Memory Processing Unit")
+	fmt.Println("A 16-bit virtual computer system with assembler")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  mpu <command> [arguments]")
+	fmt.Println()
+	fmt.Println("Commands:")
+	fmt.Println("  build    Assemble source files into binary")
+	fmt.Println("  run      Execute a program")
+	fmt.Println("  fmt      Format assembly source code")
+	fmt.Println()
+	fmt.Println("Global Options:")
+	fmt.Println("  --help, -h     Show this help message")
+	fmt.Println("  --version, -v  Show version information")
+	fmt.Println()
+	fmt.Println("Use 'mpu <command> --help' for more information about a command.")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  mpu run example/hello.s")
+	fmt.Println("  mpu build -o game.bin game.s")
+	fmt.Println("  mpu fmt mycode.s")
+}
+
+func printBuildUsage() {
+	fmt.Println("Usage: mpu build [options] <file.s> [<file2.s> ...]")
+	fmt.Println()
+	fmt.Println("Assembles one or more assembly source files (.s) into a binary (.bin) file.")
+	fmt.Println("Produces an assembly listing to stdout showing addresses and generated code.")
+	fmt.Println()
+	fmt.Println("Options:")
+	fmt.Println("  -o <file>    Output filename (default: first_input.bin)")
+	fmt.Println("  --help       Show this help message")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  mpu build program.s")
+	fmt.Println("  mpu build -o game.bin main.s graphics.s sound.s")
+}
+
+func printRunUsage() {
+	fmt.Println("Usage: mpu run [options] <file>")
+	fmt.Println()
+	fmt.Println("Executes a program file. Can run either:")
+	fmt.Println("  - Binary files (.bin) - previously compiled programs")
+	fmt.Println("  - Assembly files (.s) - compiles in memory then runs")
+	fmt.Println()
+	fmt.Println("Options:")
+	fmt.Println("  -m         Open system monitor/debugger for single-stepping")
+	fmt.Println("  --help     Show this help message")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  mpu run example/hello.s")
+	fmt.Println("  mpu run game.bin")
+	fmt.Println("  mpu run -m debug_this.s")
+	fmt.Println()
+	fmt.Println("Graphics programs:")
+	fmt.Println("  - Press ESC to quit")
+	fmt.Println("  - Press Ctrl-C in terminal for non-graphics programs")
+}
+
+func printFmtUsage() {
+	fmt.Println("Usage: mpu fmt [options] <file.s>")
+	fmt.Println()
+	fmt.Println("Formats assembly source code with consistent style.")
+	fmt.Println("Currently outputs to stdout - redirect to save formatted output.")
+	fmt.Println()
+	fmt.Println("Options:")
+	fmt.Println("  -w         Rewrite file in place (not yet implemented)")
+	fmt.Println("  --help     Show this help message")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  mpu fmt program.s")
+	fmt.Println("  mpu fmt program.s > formatted.s")
+}
+
 func format(inputs []*os.File, rewrite bool) {
 	if len(inputs) != 1 {
-		fmt.Printf("only handling 1 file right now\n")
+		fmt.Fprintf(os.Stderr, "Error: fmt command requires exactly one file\n")
+		fmt.Fprintf(os.Stderr, "Usage: mpu fmt <file.s>\n")
 		os.Exit(1)
+	}
+	if rewrite {
+		fmt.Fprintf(os.Stderr, "Warning: -w flag is not yet implemented, outputting to stdout\n")
 	}
 	lexer := asm.NewLexer(inputs[0].Name(), inputs[0])
 	parser := asm.NewParser(asm.NewInput([]asm.TokenReader{lexer}))
@@ -91,17 +204,27 @@ func format(inputs []*os.File, rewrite bool) {
 
 func getInputs(flagSet *flag.FlagSet) []*os.File {
 	var inputs []*os.File
-	for _, name := range flagSet.Args() {
+	args := flagSet.Args()
+	
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "Error: no input files specified\n\n")
+		flagSet.Usage()
+		os.Exit(1)
+	}
+	
+	for _, name := range args {
 		f, err := os.Open(name)
 		if err != nil {
-			fmt.Printf("error opening file '%s': %s\n", name, err.Error())
+			if os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "Error: file '%s' not found\n", name)
+			} else if os.IsPermission(err) {
+				fmt.Fprintf(os.Stderr, "Error: permission denied reading '%s'\n", name)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: cannot open '%s': %s\n", name, err.Error())
+			}
 			os.Exit(1)
 		}
 		inputs = append(inputs, f)
-	}
-	if len(inputs) == 0 {
-		fmt.Printf("at least one input file is required\n")
-		os.Exit(1)
 	}
 	return inputs
 }
@@ -120,11 +243,12 @@ func run(inputs []*os.File, monitor bool) {
 		}
 	}
 	if bin && src {
-		fmt.Printf("can't mix both binary and source files\n")
+		fmt.Fprintf(os.Stderr, "Error: cannot mix binary and source files\n")
+		fmt.Fprintf(os.Stderr, "Use either .bin files or .s files, not both\n")
 		os.Exit(1)
 	}
 	if bin && len(inputs) > 1 {
-		fmt.Printf("can't have more than one binary file\n")
+		fmt.Fprintf(os.Stderr, "Error: only one binary file can be run at a time\n")
 		os.Exit(1)
 	}
 
@@ -179,10 +303,10 @@ func build(inputs []*os.File, outputName string) {
 	code := linker.Code()
 	err := ioutil.WriteFile(outputName, code, 0644)
 	if err != nil {
-		fmt.Printf("error writing object file '%s': %s\n", outputName, err)
-	} else {
-		fmt.Printf("wrote %d bytes to %s\n", len(code), outputName)
+		fmt.Fprintf(os.Stderr, "Error: failed to write output file '%s': %s\n", outputName, err)
+		os.Exit(1)
 	}
+	fmt.Printf("Successfully wrote %d bytes to %s\n", len(code), outputName)
 }
 
 func newTokenReader(inputs []*os.File) *asm.Input {
