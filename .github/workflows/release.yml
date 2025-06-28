@@ -64,10 +64,14 @@ jobs:
       
       - name: Create archives
         run: |
+          # Rename binaries to just 'mpu' for the archives
+          cp dist/mpu-arm64/mpu-arm64 dist/mpu-arm64/mpu
+          cp dist/mpu-amd64/mpu-amd64 dist/mpu-amd64/mpu
+          
           tar czf mpu_${{ github.ref_name }}_Darwin_universal.tar.gz mpu
-          tar czf mpu_${{ github.ref_name }}_Darwin_arm64.tar.gz -C dist/mpu-arm64 mpu-arm64
-          tar czf mpu_${{ github.ref_name }}_Darwin_x86_64.tar.gz -C dist/mpu-amd64 mpu-amd64
-          sha256sum *.tar.gz > checksums.txt
+          tar czf mpu_${{ github.ref_name }}_Darwin_arm64.tar.gz -C dist/mpu-arm64 mpu
+          tar czf mpu_${{ github.ref_name }}_Darwin_x86_64.tar.gz -C dist/mpu-amd64 mpu
+          shasum -a 256 *.tar.gz > checksums.txt
       
       - name: Create Release
         uses: softprops/action-gh-release@v2
