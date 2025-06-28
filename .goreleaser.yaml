@@ -12,8 +12,7 @@ builds:
     goos:
       - darwin
     goarch:
-      - amd64
-      - arm64
+      - "{{ if eq .Runtime.Goarch \"arm64\" }}arm64{{ else }}amd64{{ end }}"
     ldflags:
       - -s -w 
       - -X main.version={{.Version}} 
@@ -21,13 +20,6 @@ builds:
       - -X main.date={{.Date}}
     flags:
       - -trimpath
-
-universal_binaries:
-  - id: mpu
-    ids:
-      - mpu
-    replace: true
-    name_template: "mpu"
 
 archives:
   - id: mpu
@@ -37,8 +29,7 @@ archives:
       {{ .ProjectName }}_
       {{- .Version }}_
       {{- title .Os }}_
-      {{- if eq .Arch "all" }}universal
-      {{- else if eq .Arch "amd64" }}x86_64
+      {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}

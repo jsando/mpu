@@ -9,8 +9,15 @@ permissions:
   contents: write
 
 jobs:
-  goreleaser:
-    runs-on: macos-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+          - os: macos-13
+            arch: amd64
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,12 +33,95 @@ jobs:
         run: |
           brew install sdl2{,_image,_mixer,_ttf,_gfx} pkg-config
       
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+      - name: Build
+        run: |
+          go build -ldflags "-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }} -X 'main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" -o mpu-${{ matrix.arch }}
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          distribution: goreleaser
-          version: ~> v2
-          args: release --clean
+          name: mpu-${{ matrix.arch }}
+          path: mpu-${{ matrix.arch }}
+
+  release:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+      
+      - name: Create universal binary
+        run: |
+          lipo -create -output mpu dist/mpu-arm64/mpu-arm64 dist/mpu-amd64/mpu-amd64
+          chmod +x mpu
+      
+      - name: Create archives
+        run: |
+          tar czf mpu_${{ github.ref_name }}_Darwin_universal.tar.gz mpu
+          tar czf mpu_${{ github.ref_name }}_Darwin_arm64.tar.gz -C dist/mpu-arm64 mpu-arm64
+          tar czf mpu_${{ github.ref_name }}_Darwin_x86_64.tar.gz -C dist/mpu-amd64 mpu-amd64
+          sha256sum *.tar.gz > checksums.txt
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.tar.gz
+            checksums.txt
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+      
+      - name: Update Homebrew formula
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          # Calculate SHA256 for universal binary
+          SHA256=$(shasum -a 256 mpu_${{ github.ref_name }}_Darwin_universal.tar.gz | cut -d' ' -f1)
+          
+          # Create formula content
+          cat > mpu.rb << EOF
+          class Mpu < Formula
+            desc "MPU - Memory Processing Unit, a 16-bit virtual computer system with assembler"
+            homepage "https://github.com/jsando/mpu"
+            url "https://github.com/jsando/mpu/releases/download/${{ github.ref_name }}/mpu_${{ github.ref_name }}_Darwin_universal.tar.gz"
+            sha256 "$SHA256"
+            license "Apache-2.0"
+            version "${{ github.ref_name }}"
+          
+            depends_on "sdl2"
+            depends_on "sdl2_image"
+            depends_on "sdl2_mixer"
+            depends_on "sdl2_ttf"
+            depends_on "sdl2_gfx"
+          
+            def install
+              bin.install "mpu"
+            end
+          
+            test do
+              system "#{bin}/mpu", "--version"
+            end
+          end
+          EOF
+          
+          # Clone the tap repository
+          git clone https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/jsando/homebrew-tools.git
+          
+          # Update the formula
+          cp mpu.rb homebrew-tools/Formula/
+          
+          # Commit and push
+          cd homebrew-tools
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/mpu.rb
+          git commit -m "Brew formula update for mpu version ${{ github.ref_name }}"
+          git push
