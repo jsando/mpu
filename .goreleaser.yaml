@@ -1,0 +1,95 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: mpu
+    binary: mpu
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w 
+      - -X main.version={{.Version}} 
+      - -X main.commit={{.Commit}} 
+      - -X main.date={{.Date}}
+    flags:
+      - -trimpath
+
+universal_binaries:
+  - id: mpu
+    ids:
+      - mpu
+    replace: true
+    name_template: "mpu"
+
+archives:
+  - id: mpu
+    builds:
+      - mpu
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "all" }}universal
+      {{- else if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - 'typo'
+      - 'README'
+
+brews:
+  - name: mpu
+    ids:
+      - mpu
+    repository:
+      owner: jsando
+      name: homebrew-tools
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    
+    homepage: "https://github.com/jsando/mpu"
+    description: "MPU - Memory Processing Unit, a 16-bit virtual computer system with assembler"
+    license: "Apache-2.0"
+    
+    dependencies:
+      - name: sdl2
+      - name: sdl2_image
+      - name: sdl2_mixer
+      - name: sdl2_ttf
+      - name: sdl2_gfx
+      - name: pkg-config
+        type: build
+    
+    test: |
+      system "#{bin}/mpu", "--version"
+    
+    install: |
+      bin.install "mpu"

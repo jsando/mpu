@@ -26,7 +26,11 @@ import (
 	"github.com/jsando/mpu/machine"
 )
 
-const version = "1.0.0"
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 func main() {
 	// Handle version and help flags before subcommands
@@ -34,6 +38,8 @@ func main() {
 		switch os.Args[1] {
 		case "--version", "-v":
 			fmt.Printf("mpu version %s\n", version)
+			fmt.Printf("  commit: %s\n", commit)
+			fmt.Printf("  built:  %s\n", date)
 			os.Exit(0)
 		case "--help", "-h", "help":
 			printUsage()

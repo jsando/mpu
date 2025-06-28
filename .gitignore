@@ -3,3 +3,4 @@ mpu
 etc/*.bin
 .DS_Store
 .vscode/
+dist/

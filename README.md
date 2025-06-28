@@ -18,7 +18,16 @@ MPU is also the name of a fictional US military satellite that became self-aware
 
 ![Image from Cowboy Bepop, "Jamming with Edward"](images/9_Carvings.jpeg)
 
-# Building
+# Installation
+
+## Homebrew (macOS)
+
+```bash
+brew tap jsando/tools
+brew install mpu
+```
+
+## Alternative: Build from Source
 
 1. Ensure the Go toolchain is installed as per instructions on golang.org
 2. Install SDL dependencies
