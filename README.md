@@ -27,6 +27,19 @@ brew tap jsando/tools
 brew install mpu
 ```
 
+After installation, you can find:
+- Example programs in: `/usr/local/share/mpu/examples/` (Intel) or `/opt/homebrew/share/mpu/examples/` (Apple Silicon)
+- Documentation in: `/usr/local/share/doc/mpu/` (Intel) or `/opt/homebrew/share/doc/mpu/` (Apple Silicon)
+
+To run an example after homebrew installation:
+```bash
+# On Intel Macs
+mpu run /usr/local/share/mpu/examples/hello.s
+
+# On Apple Silicon Macs
+mpu run /opt/homebrew/share/mpu/examples/hello.s
+```
+
 ## Alternative: Build from Source
 
 1. Ensure the Go toolchain is installed as per instructions on golang.org

@@ -33,6 +33,12 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+      - src: example/**/*
+        dst: examples
+        strip_parent: true
 
 checksum:
   name_template: 'checksums.txt'
@@ -84,3 +90,16 @@ brews:
     
     install: |
       bin.install "mpu"
+      doc.install "README.md"
+      (pkgshare/"examples").install Dir["examples/*"]
+    
+    caveats: <<~EOS
+      Example programs have been installed to:
+        #{HOMEBREW_PREFIX}/share/mpu/examples/
+      
+      To run an example:
+        mpu run #{HOMEBREW_PREFIX}/share/mpu/examples/hello.s
+      
+      For more information, see:
+        #{HOMEBREW_PREFIX}/share/doc/mpu/README.md
+    EOS
