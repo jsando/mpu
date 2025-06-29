@@ -62,8 +62,6 @@ For other operating systems see https://github.com/veandco/go-sdl2#installation
 
 # Running
 
-Assume you are in the mpu folder and now have a binary named 'mpu' in that folder (after 'go build'), it supports the following commands:
-
 ## Run a program
 
 ```
@@ -81,7 +79,7 @@ memory.
 Ex, run hello world:
 
 ```
-./mpu run example/hello.s
+mpu run example/hello.s
 ```
 
 ## Compile .s to .bin
@@ -109,14 +107,14 @@ looks good, then rename or copy-paste.
 ```
 # Examples
 
-To run any of the examples use "./mpu run example/name".
+To run any of the examples use "mpu run example/name".
 
 Here are some of the graphics examples.
 
 ## Drawing random filled rectangles 
 
 ```
-./mpu run example/graphics.s
+mpu run example/graphics.s
 ```
 Press ctrl-c in terminal to quit.
 ![Screenshot from example/graphics.s](images/graphics.jpeg)
@@ -124,7 +122,7 @@ Press ctrl-c in terminal to quit.
 ## 16-Segment LCD Display Font
 
 ```
-./mpu run example/lcd_test.s
+mpu run example/lcd_test.s
 ```
 Press esc to quit.
 ![Screenshot from example/lcd_test.s](images/lcd.jpeg)
@@ -132,7 +130,7 @@ Press esc to quit.
 ## Pong Game
 
 ```
-./mpu run example/pong.s
+mpu run example/pong.s
 ```
 Press esc to quit.  
 Press '1' for 1 player, '2' for 2 player.  
@@ -143,7 +141,7 @@ Player 2 controls are 'l' and ','.
 ## Falling Blocks Game
 
 ```
-./mpu run example/blocks.s
+mpu run example/blocks.s
 ```
 Press esc to quit.  
 Press space to start new game.
