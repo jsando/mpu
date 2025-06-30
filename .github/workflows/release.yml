@@ -145,13 +145,16 @@ jobs:
           # Clone the tap repository
           git clone https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/jsando/homebrew-tools.git
           
-          # Update the formula (formulas are in root directory)
-          cp mpu.rb homebrew-tools/
+          # Create Formula directory if it doesn't exist
+          mkdir -p homebrew-tools/Formula
+          
+          # Update the formula in Formula directory
+          cp mpu.rb homebrew-tools/Formula/
           
           # Commit and push
           cd homebrew-tools
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add mpu.rb
+          git add Formula/mpu.rb
           git commit -m "Brew formula update for mpu version ${{ github.ref_name }}"
           git push
