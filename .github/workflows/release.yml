@@ -123,6 +123,11 @@ jobs:
               (pkgshare/"examples").install Dir["examples/*"]
             end
           
+            def post_install
+              # Ensure the binary is executable
+              (bin/"mpu").chmod 0755
+            end
+          
             def caveats
               <<~EOS
                 Example programs have been installed to:
@@ -133,6 +138,9 @@ jobs:
                 
                 For more information, see:
                   #{HOMEBREW_PREFIX}/share/doc/mpu/README.md
+                
+                If 'mpu' command is not found after installation, run:
+                  brew link mpu
               EOS
             end
           
