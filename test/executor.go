@@ -27,9 +27,16 @@ type TestResult struct {
 	Passed  bool
 	Message string
 	// For assertion failures
+	FailureDetails []AssertionDetail
+}
+
+// AssertionDetail holds details about a single assertion failure.
+type AssertionDetail struct {
 	PC       uint16
-	Expected uint16
-	Actual   uint16
+	Expected int
+	Actual   int
+	File     string
+	Line     int
 }
 
 // TestExecutor runs a test suite and collects results.
@@ -106,10 +113,25 @@ func (e *TestExecutor) runTest(test TestInfo) TestResult {
 	// Check if test passed
 	failures := e.machine.AssertionFailures() - initialFailures
 	if failures > 0 {
+		// Get failure details
+		var failureDetails []AssertionDetail
+		if lastFailure := e.machine.LastAssertionFailure(); lastFailure != nil {
+			// Find source location from debug info
+			file, line := e.findSourceLocation(lastFailure.PC)
+			failureDetails = append(failureDetails, AssertionDetail{
+				PC:       lastFailure.PC,
+				Expected: lastFailure.Expected,
+				Actual:   lastFailure.Actual,
+				File:     file,
+				Line:     line,
+			})
+		}
+		
 		return TestResult{
-			Name:    test.Name,
-			Passed:  false,
-			Message: fmt.Sprintf("%d assertion(s) failed", failures),
+			Name:           test.Name,
+			Passed:         false,
+			Message:        fmt.Sprintf("%d assertion(s) failed", failures),
+			FailureDetails: failureDetails,
 		}
 	}
 
@@ -174,4 +196,15 @@ func (e *TestExecutor) Summary() (passed, failed int) {
 		}
 	}
 	return
+}
+
+// findSourceLocation finds the source file and line for a given PC.
+func (e *TestExecutor) findSourceLocation(pc uint16) (string, int) {
+	// Search debug info for the closest PC match
+	for i := len(e.debugInfo) - 1; i >= 0; i-- {
+		if e.debugInfo[i].PC <= pc {
+			return e.debugInfo[i].File, e.debugInfo[i].Line
+		}
+	}
+	return "", 0
 }

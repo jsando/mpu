@@ -31,6 +31,13 @@ const (
 // BaseDirEnv is the key for an environment variable to use for loading relative files.
 const BaseDirEnv = "MPU_BASE_DIR"
 
+// AssertionFailure records details of a failed assertion
+type AssertionFailure struct {
+	PC       uint16
+	Expected int
+	Actual   int
+}
+
 // Machine implements MPU ... memory processing unit.
 // It supports 27 instructions and 6 addressing modes.
 type Machine struct {
@@ -46,6 +53,7 @@ type Machine struct {
 	assertion      bool   // Assertion flag, set by SEA instruction, affects next CMP
 	testMode       bool   // Test mode, enables assertion checking
 	assertionFails int    // Count of assertion failures
+	lastFailure    *AssertionFailure // Details of the last assertion failure
 }
 
 func NewMachineWithDevices(d *IODispatcher, image []byte) *Machine {
@@ -127,7 +135,12 @@ func (m *Machine) Run() {
 				m.assertion = false // Clear flag
 				if m.testMode && value1 != value2 {
 					m.assertionFails++
-					// TODO: Report failure with PC, actual, expected
+					// Record failure details - PC points to next instruction, so subtract bytes+1
+					m.lastFailure = &AssertionFailure{
+						PC:       m.pc - uint16(bytes) - 1,
+						Expected: value2,
+						Actual:   value1,
+					}
 				}
 			}
 		case And:
@@ -345,6 +358,11 @@ func (m *Machine) EnableTestMode() {
 // AssertionFailures returns the count of assertion failures
 func (m *Machine) AssertionFailures() int {
 	return m.assertionFails
+}
+
+// LastAssertionFailure returns details of the last assertion failure
+func (m *Machine) LastAssertionFailure() *AssertionFailure {
+	return m.lastFailure
 }
 
 // Flags returns a snapshot of the current state of the registers and flags.

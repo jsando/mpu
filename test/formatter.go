@@ -27,15 +27,17 @@ type Formatter interface {
 
 // TerminalFormatter formats results for terminal output.
 type TerminalFormatter struct {
-	Verbose bool
-	Color   bool
+	Verbose      bool
+	Color        bool
+	sourceReader *SourceReader
 }
 
 // NewTerminalFormatter creates a new terminal formatter.
 func NewTerminalFormatter(verbose, color bool) *TerminalFormatter {
 	return &TerminalFormatter{
-		Verbose: verbose,
-		Color:   color,
+		Verbose:      verbose,
+		Color:        color,
+		sourceReader: NewSourceReader(),
 	}
 }
 
@@ -60,6 +62,34 @@ func (f *TerminalFormatter) Format(results []TestResult, w io.Writer) error {
 			}
 			if f.Verbose && result.Message != "" {
 				fmt.Fprintf(w, "  %s\n", result.Message)
+			}
+			
+			// Show failure details with source
+			for _, detail := range result.FailureDetails {
+				if detail.File != "" && detail.Line > 0 {
+					fmt.Fprintf(w, "\n  at %s:%d\n", detail.File, detail.Line)
+					
+					// Get source lines with context
+					lines, startLine, err := f.sourceReader.GetContext(detail.File, detail.Line, 1, 1)
+					if err == nil {
+						for i, line := range lines {
+							lineNum := startLine + i
+							if lineNum == detail.Line {
+								// Highlight the failing line
+								if f.Color {
+									fmt.Fprintf(w, "\033[31m%s\033[0m\n", FormatSourceLine(lineNum, line, true))
+								} else {
+									fmt.Fprintf(w, "%s  <-- assertion failed\n", FormatSourceLine(lineNum, line, true))
+								}
+							} else {
+								fmt.Fprintf(w, "%s\n", FormatSourceLine(lineNum, line, false))
+							}
+						}
+					}
+					
+					fmt.Fprintf(w, "\n  Expected: %d\n", detail.Expected)
+					fmt.Fprintf(w, "  Actual:   %d\n", detail.Actual)
+				}
 			}
 		}
 	}
