@@ -42,3 +42,68 @@ add_numbers(result word, a word, b word):
 		s = s.Next()
 	}
 }
+
+func TestErrorLineNumbers(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantLine int
+		wantErr  string
+	}{
+		{
+			name: "invalid instruction on line 3",
+			input: `org 0x100
+clc
+invalid_instruction
+hlt`,
+			wantLine: 3,
+			wantErr:  "expected =, :, or ():",
+		},
+		{
+			name: "invalid instruction after blank line",
+			input: `org 0x100
+clc
+
+invalid_instruction
+hlt`,
+			wantLine: 4,
+			wantErr:  "expected =, :, or ():",
+		},
+		{
+			name: "invalid instruction on first line",
+			input: `invalid_instruction
+clc`,
+			wantLine: 1,
+			wantErr:  "expected =, :, or ():",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParserFromReader("test", strings.NewReader(tt.input))
+			parser.Parse()
+			
+			if parser.messages.errors == 0 {
+				t.Fatal("expected an error but got none")
+			}
+			
+			// Check that the error is on the correct line
+			foundCorrectLine := false
+			for _, msg := range parser.messages.messages {
+				if msg.messageType == MessageError && strings.Contains(msg.message, tt.wantErr) {
+					// msg.line is 1-based line number
+					if msg.line == tt.wantLine {
+						foundCorrectLine = true
+						break
+					} else {
+						t.Errorf("error reported on line %d, want line %d", msg.line, tt.wantLine)
+					}
+				}
+			}
+			
+			if !foundCorrectLine {
+				t.Errorf("did not find error on line %d", tt.wantLine)
+			}
+		})
+	}
+}
