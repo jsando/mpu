@@ -71,6 +71,10 @@ func (p *Parser) Statements() Statement {
 	return p.first
 }
 
+func (p *Parser) Messages() *Messages {
+	return p.messages
+}
+
 func (p *Parser) addStatement(s Statement) {
 	s.SetFile(p.lexer.FileName())
 	s.SetLine(p.lexer.Line())

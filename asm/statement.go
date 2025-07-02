@@ -328,3 +328,13 @@ func (e ExprBinary) computeValue(symbols *SymbolTable) (ival int, bval []byte, r
 	}
 	return
 }
+
+// Name returns the name of the test function.
+func (t *TestStatement) Name() string {
+	return t.name
+}
+
+// Name returns the name of the label.
+func (l *LabelStatement) Name() string {
+	return l.name
+}
