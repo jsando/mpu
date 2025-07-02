@@ -1,0 +1,177 @@
+// Copyright 2022 Jason Sando <jason.sando.lv@gmail.com>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package test
+
+import (
+	"fmt"
+
+	"github.com/jsando/mpu/asm"
+	"github.com/jsando/mpu/machine"
+)
+
+// TestResult holds the result of a single test execution.
+type TestResult struct {
+	Name    string
+	Passed  bool
+	Message string
+	// For assertion failures
+	PC       uint16
+	Expected uint16
+	Actual   uint16
+}
+
+// TestExecutor runs a test suite and collects results.
+type TestExecutor struct {
+	machine   *machine.Machine
+	suite     *TestSuite
+	symbols   *asm.SymbolTable
+	debugInfo []asm.DebugInfo
+	results   []TestResult
+}
+
+// NewTestExecutor creates a new test executor.
+func NewTestExecutor(m *machine.Machine, suite *TestSuite, symbols *asm.SymbolTable, debugInfo []asm.DebugInfo) *TestExecutor {
+	return &TestExecutor{
+		machine:   m,
+		suite:     suite,
+		symbols:   symbols,
+		debugInfo: debugInfo,
+		results:   []TestResult{},
+	}
+}
+
+// Run executes all tests in the suite.
+func (e *TestExecutor) Run() error {
+	// Enable test mode on the machine
+	e.machine.EnableTestMode()
+
+	for _, test := range e.suite.Tests {
+		result := e.runTest(test)
+		e.results = append(e.results, result)
+	}
+
+	return nil
+}
+
+// runTest executes a single test.
+func (e *TestExecutor) runTest(test TestInfo) TestResult {
+	// Find the test function address
+	symbol := e.symbols.GetSymbol(test.Function)
+	if symbol == nil {
+		return TestResult{
+			Name:    test.Name,
+			Passed:  false,
+			Message: fmt.Sprintf("test function '%s' not found in symbol table", test.Function),
+		}
+	}
+
+	// Reset machine state
+	e.resetMachineState()
+
+	// Call setup if exists
+	if e.suite.SetupFn != "" {
+		if err := e.callFunction(e.suite.SetupFn); err != nil {
+			return TestResult{
+				Name:    test.Name,
+				Passed:  false,
+				Message: fmt.Sprintf("setup failed: %v", err),
+			}
+		}
+	}
+
+	// Save initial assertion count
+	initialFailures := e.machine.AssertionFailures()
+
+	// Call the test function
+	testAddr := uint16(symbol.Value())
+	e.callAddress(testAddr)
+
+	// Call teardown if exists
+	if e.suite.TeardownFn != "" {
+		e.callFunction(e.suite.TeardownFn)
+	}
+
+	// Check if test passed
+	failures := e.machine.AssertionFailures() - initialFailures
+	if failures > 0 {
+		return TestResult{
+			Name:    test.Name,
+			Passed:  false,
+			Message: fmt.Sprintf("%d assertion(s) failed", failures),
+		}
+	}
+
+	return TestResult{
+		Name:   test.Name,
+		Passed: true,
+	}
+}
+
+// resetMachineState resets the machine to a clean state for each test.
+func (e *TestExecutor) resetMachineState() {
+	// Reset SP to top of memory
+	e.machine.Memory().PutWord(machine.SPAddr, 0xFFFF)
+	// Reset FP
+	e.machine.Memory().PutWord(machine.FPAddr, 0)
+	// Clear carry and other flags by executing CLC, CLB
+	// This is a simplified reset - might need more comprehensive reset later
+}
+
+// callFunction calls a function by name.
+func (e *TestExecutor) callFunction(name string) error {
+	symbol := e.symbols.GetSymbol(name)
+	if symbol == nil {
+		return fmt.Errorf("function '%s' not found", name)
+	}
+	
+	addr := uint16(symbol.Value())
+	e.callAddress(addr)
+	return nil
+}
+
+// callAddress calls a function at the given address using JSR/RET convention.
+func (e *TestExecutor) callAddress(addr uint16) {
+	// Get current PC
+	pc := e.machine.Memory().GetWord(machine.PCAddr)
+	
+	// Push return address (current PC + 3 for JSR instruction)
+	sp := e.machine.Memory().GetWord(machine.SPAddr)
+	sp -= 2
+	e.machine.Memory().PutWord(sp, pc+3)
+	e.machine.Memory().PutWord(machine.SPAddr, sp)
+	
+	// Jump to test function
+	e.machine.Memory().PutWord(machine.PCAddr, addr)
+	
+	// Run until RET
+	e.machine.Run()
+}
+
+// Results returns the test results.
+func (e *TestExecutor) Results() []TestResult {
+	return e.results
+}
+
+// Summary returns a summary of test results.
+func (e *TestExecutor) Summary() (passed, failed int) {
+	for _, result := range e.results {
+		if result.Passed {
+			passed++
+		} else {
+			failed++
+		}
+	}
+	return
+}

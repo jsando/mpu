@@ -79,6 +79,8 @@ func (l *Linker) Link() {
 			l.defineLabel(t, t.name)
 		case *FunctionStatement:
 			l.doFunction(t)
+		case *TestStatement:
+			l.doTest(t)
 		case *VarStatement:
 			// nothing to do, they are appended to the FunctionStatement
 		case *InstructionStatement:
@@ -317,6 +319,13 @@ func (l *Linker) doFunction(fn *FunctionStatement) {
 	l.writeByte(localSize)
 }
 
+func (l *Linker) doTest(test *TestStatement) {
+	// Test functions are just like regular functions but without parameters
+	// Define the test function label
+	l.defineLabel(test, test.name)
+	l.function = nil  // Tests don't have automatic fp handling like functions
+}
+
 func (l *Linker) doEmit2Operand(stmt *InstructionStatement) {
 	if len(stmt.operands) != 2 {
 		l.errorf(stmt, "expected 2 operands")
@@ -437,6 +446,14 @@ func (l *Linker) Code() []byte {
 
 func (l *Linker) DebugInfo() []DebugInfo {
 	return l.debugInfo
+}
+
+func (l *Linker) Symbols() *SymbolTable {
+	return l.symbols
+}
+
+func (l *Linker) Messages() *Messages {
+	return l.messages
 }
 
 func (l *Linker) overrideFramePointerSymbols(ins *InstructionStatement) {

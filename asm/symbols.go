@@ -31,6 +31,10 @@ type Symbol struct {
 	fp      bool
 }
 
+func (s *Symbol) Value() int {
+	return s.value
+}
+
 func (s *SymbolTable) GetSymbol(text string) *Symbol {
 	return s.symbols[text]
 }
