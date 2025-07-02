@@ -94,6 +94,26 @@ an assembly listing to stdout.
     same name as the first input file with a ".bin" suffix.
 ```
 
+## Run Unit Tests
+
+```
+mpu test [-v] [-color] files
+
+Discovers and runs unit tests in assembly source files. Tests 
+are defined using the 'test' keyword and use the SEA (Set 
+Assertion) instruction for assertions.
+
+    -v         Show verbose output (display all test names)
+    -color     Colorize output (default: true)
+```
+
+Ex, run tests:
+
+```
+mpu test example/test_simple.s
+mpu test -v example/test_*.s
+```
+
 ## Format Source
 
 ```
@@ -235,6 +255,7 @@ Is effectively:
 * Clb - Clear bytes mode flag.
 * Clc - Clear carry flag.
 * Sec - Set carry flag.
+* Sea - Set assertion flag (for unit tests - affects next CMP instruction).
 * Ret - Return from subroutine, using 16 bit address on top of stack.
 * Rst - Restore framepointer and return from subroutine.
 
@@ -563,6 +584,49 @@ Itoa(value word, buffer word, bsize word):
     ...    
 ```
 
+## Unit Tests
+
+MPU includes a built-in unit testing framework that allows you to write tests directly in assembly. Tests are defined using the `test` keyword followed by a function name.
+
+### Writing Tests
+
+Tests are declared similar to functions but with the `test` keyword:
+
+```
+test TestAddition():
+    cpy a, #5
+    add a, #3
+    sea         // Set assertion flag
+    cmp a, #8   // Assert that a equals 8
+    ret
+```
+
+### Assertions
+
+The `sea` (Set Assertion) instruction sets a flag that causes the next `cmp` instruction to act as an assertion. If the comparison fails (values are not equal), the test fails and the failure location is recorded.
+
+### Running Tests
+
+Use the `mpu test` command to run tests:
+
+```
+mpu test mytest.s
+mpu test -v test_*.s    // Verbose output
+```
+
+Failed assertions show the source code location and expected vs actual values:
+
+```
+✗ TestAddition
+  at test.s:25
+    24 |     sea
+    25 |     cmp result, #10
+    26 |     ret
+  
+  Expected: 10
+  Actual: 5
+```
+
 For each parameter the assembler needs to know the size (byte or word) so it can allocate 1 or 2 bytes.  In the example above, there are 3 word parameters passed in on the stack.  The stack also contains the return address.
 
 Frame pointer and stack pointer, and values for each local label:
@@ -612,6 +676,7 @@ line :=
     |   label instruction
     |   instruction
     |   function
+    |   test
     |   equate
     |   vardecl
     |   import
@@ -629,6 +694,9 @@ equate :=
 
 function :=
         ident '(' param-list ')' ':'
+
+test :=
+        'test' ident '(' ')' ':'
 
 vardecl :=
         'var' ident ['byte' | 'word']
