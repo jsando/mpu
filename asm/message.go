@@ -26,13 +26,13 @@ const (
 type Message struct {
 	messageType int
 	file        string
-	line        int
-	column      int
+	line        int    // 1-based line number
+	column      int    // 1-based column number
 	message     string
 }
 
 func (m Message) String() string {
-	return fmt.Sprintf("%s:%d:%d %s", m.file, m.line+1, m.column, m.message)
+	return fmt.Sprintf("%s:%d:%d %s", m.file, m.line, m.column, m.message)
 }
 
 // Messages is a collection of compiler messages.

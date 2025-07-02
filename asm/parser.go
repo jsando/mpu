@@ -110,6 +110,11 @@ func (p *Parser) errorf(format string, a ...interface{}) {
 	p.messages.Error(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
 }
 
+func (p *Parser) errorAtf(line int, format string, a ...interface{}) {
+	s := fmt.Sprintf(format, a...)
+	p.messages.Error(p.lexer.FileName(), line, 0, s)
+}
+
 func (p *Parser) warnf(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
 	p.messages.Warn(p.lexer.FileName(), p.lexer.Line(), p.lexer.Column(), s)
@@ -248,6 +253,8 @@ func (p *Parser) parseImports() {
 func (p *Parser) parseGlobalSymbol() {
 	p.function = nil
 	text := p.lexer.TokenText()
+	// Save line number before advancing lexer
+	line := p.lexer.Line()
 	tok := p.lexer.Next()
 	if tok == TokEquals {
 		p.global = ""
@@ -268,7 +275,10 @@ func (p *Parser) parseGlobalSymbol() {
 		p.global = text
 		p.parseFunctionDecl(text)
 	} else {
-		p.errorf("expected =, :, or (): after identifier '%s'", text)
+		// Report error at the saved line number
+		p.errorAtf(line, "expected =, :, or (): after identifier '%s'", text)
+		// Skip to end of line for error recovery
+		p.skipToEOL()
 	}
 }
 
