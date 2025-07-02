@@ -81,9 +81,11 @@ const (
 	TokSav
 	TokRst
 	TokHlt
+	TokSea
 	TokFunction
 	TokImport
 	TokVar
+	TokTest
 	TokComment
 	TokEOL
 )
@@ -101,8 +103,9 @@ var tokenImage = []string{
 	"pop", "jmp", "jeq", "jne", "jge",
 	"jlt", "inc", "dec", "jsr", "ret",
 	"clc", "sec", "clb", "seb", "jcc",
-	"jcs", "sav", "rst", "hlt", "function()",
-	"import", "var", "<comment>", "<eol>",
+	"jcs", "sav", "rst", "hlt", "sea",
+	"function()", "import", "var", "test",
+	"<comment>", "<eol>",
 }
 
 func (t TokenType) String() string {

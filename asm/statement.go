@@ -102,6 +102,11 @@ type (
 		fpLocals []*FpParam
 	}
 
+	TestStatement struct {
+		Node
+		name string
+	}
+
 	VarStatement struct {
 		Node
 		name string

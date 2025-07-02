@@ -107,3 +107,109 @@ clc`,
 		})
 	}
 }
+
+func TestParseTestFunction(t *testing.T) {
+	// Test parsing a simple test function
+	source := `
+test MyTest():
+    sea
+    cmp a, #5
+    ret
+`
+	parser := NewParserFromReader("test", strings.NewReader(source))
+	parser.Parse()
+	
+	if parser.messages.errors != 0 {
+		t.Fatalf("expected no errors, got %d", parser.messages.errors)
+	}
+	
+	// Find the test statement
+	var testStmt *TestStatement
+	for s := parser.Statements(); s != nil; s = s.Next() {
+		if ts, ok := s.(*TestStatement); ok {
+			testStmt = ts
+			break
+		}
+	}
+	
+	if testStmt == nil {
+		t.Fatal("expected to find TestStatement")
+	}
+	
+	if testStmt.name != "MyTest" {
+		t.Errorf("expected test name 'MyTest', got '%s'", testStmt.name)
+	}
+}
+
+func TestParseNormalFunction(t *testing.T) {
+	// Ensure normal functions still work
+	source := `
+myFunc(a word, b word):
+    add a, b
+    ret
+`
+	parser := NewParserFromReader("test", strings.NewReader(source))
+	parser.Parse()
+	
+	if parser.messages.errors != 0 {
+		t.Fatalf("expected no errors, got %d", parser.messages.errors)
+	}
+	
+	// Find the function statement
+	var fnStmt *FunctionStatement
+	for s := parser.Statements(); s != nil; s = s.Next() {
+		if fs, ok := s.(*FunctionStatement); ok {
+			fnStmt = fs
+			break
+		}
+	}
+	
+	if fnStmt == nil {
+		t.Fatal("expected to find FunctionStatement")
+	}
+	
+	if fnStmt.name != "myFunc" {
+		t.Errorf("expected function name 'myFunc', got '%s'", fnStmt.name)
+	}
+}
+
+func TestParseTestAndNormalMixed(t *testing.T) {
+	// Test parsing both test and normal functions in same file
+	source := `
+myFunc(a word):
+    inc a
+    ret
+
+test TestMyFunc():
+    cpy a, #5
+    jsr myFunc
+    sea
+    cmp a, #6
+    ret
+`
+	parser := NewParserFromReader("test", strings.NewReader(source))
+	parser.Parse()
+	
+	if parser.messages.errors != 0 {
+		t.Fatalf("expected no errors, got %d", parser.messages.errors)
+	}
+	
+	// Count statements
+	var fnCount, testCount int
+	for s := parser.Statements(); s != nil; s = s.Next() {
+		switch s.(type) {
+		case *FunctionStatement:
+			fnCount++
+		case *TestStatement:
+			testCount++
+		}
+	}
+	
+	if fnCount != 1 {
+		t.Errorf("expected 1 function, got %d", fnCount)
+	}
+	
+	if testCount != 1 {
+		t.Errorf("expected 1 test, got %d", testCount)
+	}
+}

@@ -198,6 +198,8 @@ loop:
 				p.parseGlobalSymbol() // global label, equate, or function
 			case TokImport:
 				p.parseImports()
+			case TokTest:
+				p.parseTestDecl()
 			case TokDb:
 				p.parseDb()
 			case TokDw:
@@ -208,6 +210,8 @@ loop:
 				p.parseOrg()
 			case TokVar:
 				p.parseVar()
+			case TokSea:
+				p.parseInstruction(tok)
 			default:
 				// assume it's an instruction
 				p.parseInstruction(tok)
@@ -328,6 +332,47 @@ func (p *Parser) parseFunctionDecl(fnName string) {
 		p.errorf("expected ':', got: %s", p.lexer.TokenText())
 	}
 	p.function = fn
+	p.lexer.Next()
+}
+
+func (p *Parser) parseTestDecl() {
+	// test keyword already consumed
+	if p.lexer.Next() != TokIdent {
+		p.errorf("expected test function name after 'test'")
+		p.skipToEOL()
+		return
+	}
+	
+	testName := p.lexer.TokenText()
+	
+	if p.lexer.Next() != TokLeftParen {
+		p.errorf("expected '(' after test function name")
+		p.skipToEOL()
+		return
+	}
+	
+	if p.lexer.Next() != TokRightParen {
+		p.errorf("expected ')' - test functions take no parameters")
+		p.skipToEOL()
+		return
+	}
+	
+	if p.lexer.Next() != TokColon {
+		p.errorf("expected ':' after test function declaration")
+		p.skipToEOL()
+		return
+	}
+	
+	// Create test statement
+	test := &TestStatement{
+		name: testName,
+	}
+	p.addStatement(test)
+	
+	// Set this as the current global context
+	p.global = testName
+	p.function = nil
+	
 	p.lexer.Next()
 }
 
