@@ -34,15 +34,18 @@ const BaseDirEnv = "MPU_BASE_DIR"
 // Machine implements MPU ... memory processing unit.
 // It supports 27 instructions and 6 addressing modes.
 type Machine struct {
-	memory   Memory // 64kb of memory + dma overlay
-	pc       uint16 // program counter ... shadowed on read/write to address $0
-	sp       uint16 // stack pointer ... shadowed on read/write to address $2
-	fp       uint16 // frame pointer ... shadowed on read/write to address $4
-	negative bool   // Negative flag, set true if last value had the high bit set.
-	zero     bool   // Zero flag, set true if last value had zero value.
-	carry    bool   // Carry flag
-	bytes    bool   // Bytes flag, if true then operations are on bytes instead of words
-	step     bool   // Single step mode, if true breaks after executing 1 instruction
+	memory         Memory // 64kb of memory + dma overlay
+	pc             uint16 // program counter ... shadowed on read/write to address $0
+	sp             uint16 // stack pointer ... shadowed on read/write to address $2
+	fp             uint16 // frame pointer ... shadowed on read/write to address $4
+	negative       bool   // Negative flag, set true if last value had the high bit set.
+	zero           bool   // Zero flag, set true if last value had zero value.
+	carry          bool   // Carry flag
+	bytes          bool   // Bytes flag, if true then operations are on bytes instead of words
+	step           bool   // Single step mode, if true breaks after executing 1 instruction
+	assertion      bool   // Assertion flag, set by SEA instruction, affects next CMP
+	testMode       bool   // Test mode, enables assertion checking
+	assertionFails int    // Count of assertion failures
 }
 
 func NewMachineWithDevices(d *IODispatcher, image []byte) *Machine {
@@ -87,15 +90,17 @@ func (m *Machine) Memory() Memory {
 func (m *Machine) Run() {
 	for {
 		in := m.memory.GetByte(m.pc)
-		if in == 0 {
-			return
-		}
 		var n uint16      // Number of bytes for each operand
 		var bytes uint16  // Total count of operand bytes (to skip pc to next instruction)
 		var target uint16 // the address being updated, ie often the address of value1
 		value1 := 0       // value of first operand, if any
 		value2 := 0       // value of second operand, if any
 		opCode, m1, m2 := DecodeOp(in)
+		
+		// Check for halt after decoding
+		if opCode == Hlt {
+			return
+		}
 		if m1 != Implied {
 			target, value1, n = m.fetchOperand(m1, m.pc+1)
 			bytes = n
@@ -117,6 +122,14 @@ func (m *Machine) Run() {
 			m.writeTarget(target, value1/value2)
 		case Cmp:
 			m.updateFlagsWord(value1 - value2)
+			// Handle assertion if flag is set
+			if m.assertion {
+				m.assertion = false // Clear flag
+				if m.testMode && value1 != value2 {
+					m.assertionFails++
+					// TODO: Report failure with PC, actual, expected
+				}
+			}
 		case And:
 			m.writeTarget(target, value1&value2)
 		case Or:
@@ -196,6 +209,8 @@ func (m *Machine) Run() {
 			m.carry = true
 		case Clc:
 			m.carry = false
+		case Sea:
+			m.assertion = true
 		}
 
 		if m.step {
@@ -320,6 +335,16 @@ type Flags struct {
 	Zero     bool
 	Carry    bool
 	Bytes    bool
+}
+
+// EnableTestMode enables assertion checking for unit tests
+func (m *Machine) EnableTestMode() {
+	m.testMode = true
+}
+
+// AssertionFailures returns the count of assertion failures
+func (m *Machine) AssertionFailures() int {
+	return m.assertionFails
 }
 
 // Flags returns a snapshot of the current state of the registers and flags.

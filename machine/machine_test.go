@@ -2,6 +2,8 @@ package machine
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWriteUpdatesFlags(t *testing.T) {
@@ -245,4 +247,113 @@ func (c *MachineTester) addressContains(t *testing.T, address uint16, value int)
 	if word != value {
 		t.Errorf("expected: 0x%0x, got: 0x%0x", value, word)
 	}
+}
+
+func TestSeaInstruction(t *testing.T) {
+	// Test that SEA sets the assertion flag
+	code := []byte{
+		byte(EncodeOp(Sea, Implied, Implied)), // SEA
+		byte(EncodeOp(Hlt, Implied, Implied)), // HLT
+	}
+	
+	// Create machine with proper image (PC at 0x100 by default)
+	image := make([]byte, 0x200)
+	// Set PC to 0x100
+	image[PCAddr] = 0x00
+	image[PCAddr+1] = 0x01
+	copy(image[0x100:], code)
+	
+	machine := NewMachine(image)
+	
+	// Initially assertion flag should be false
+	assert.False(t, machine.assertion, "Assertion flag should be false initially")
+	
+	// Execute SEA instruction
+	machine.step = true
+	machine.Run()
+	
+	// Assertion flag should now be true
+	assert.True(t, machine.assertion, "Assertion flag should be true after SEA")
+}
+
+func TestCmpWithAssertion(t *testing.T) {
+	// Test CMP behavior with assertion flag set
+	// Set up memory locations for comparison
+	code := []byte{
+		// Store values at addresses 0x100 and 0x102
+		byte(EncodeOp(Cpy, Absolute, Immediate)),   // CPY 0x100, #5
+		0x00, 0x01, // addr = 0x100
+		0x05, 0x00, // value = 5
+		byte(EncodeOp(Cpy, Absolute, Immediate)),   // CPY 0x102, #5
+		0x02, 0x01, // addr = 0x102
+		0x05, 0x00, // value = 5
+		
+		// First comparison (should pass)
+		byte(EncodeOp(Sea, Implied, Implied)),       // SEA
+		byte(EncodeOp(Cmp, Absolute, Immediate)),    // CMP 0x100, #5
+		0x00, 0x01, // addr = 0x100
+		0x05, 0x00, // value = 5
+		
+		// Second comparison (should fail)
+		byte(EncodeOp(Sea, Implied, Implied)),       // SEA
+		byte(EncodeOp(Cmp, Absolute, Immediate)),    // CMP 0x100, #3
+		0x00, 0x01, // addr = 0x100
+		0x03, 0x00, // value = 3
+		
+		byte(EncodeOp(Hlt, Implied, Implied)),       // HLT
+	}
+	
+	// Create machine with proper image
+	image := make([]byte, 0x200)
+	// Set PC to 0x100
+	image[PCAddr] = 0x00
+	image[PCAddr+1] = 0x01
+	copy(image[0x100:], code)
+	
+	machine := NewMachine(image)
+	machine.EnableTestMode()
+	
+	// Run the program
+	machine.Run()
+	
+	// First CMP should pass (5 == 5), second should fail (5 != 3)
+	assert.Equal(t, 1, machine.AssertionFailures(), "Should have 1 assertion failure")
+	
+	// Assertion flag should be cleared after CMP
+	assert.False(t, machine.assertion, "Assertion flag should be cleared after CMP")
+}
+
+func TestCmpWithoutAssertion(t *testing.T) {
+	// Test that normal CMP behavior is unchanged without SEA
+	code := []byte{
+		// Store value at address 0x100
+		byte(EncodeOp(Cpy, Absolute, Immediate)),   // CPY 0x100, #5
+		0x00, 0x01, // addr = 0x100
+		0x05, 0x00, // value = 5
+		
+		byte(EncodeOp(Cmp, Absolute, Immediate)),   // CMP 0x100, #3
+		0x00, 0x01, // addr = 0x100
+		0x03, 0x00, // value = 3
+		byte(EncodeOp(Hlt, Implied, Implied)),       // HLT
+	}
+	
+	// Create machine with proper image
+	image := make([]byte, 0x200)
+	// Set PC to 0x100
+	image[PCAddr] = 0x00
+	image[PCAddr+1] = 0x01
+	copy(image[0x100:], code)
+	
+	machine := NewMachine(image)
+	machine.EnableTestMode()
+	
+	// Run the program
+	machine.Run()
+	
+	// No assertion failures expected
+	assert.Equal(t, 0, machine.AssertionFailures(), "Should have no assertion failures")
+	
+	// Check that flags are set correctly
+	assert.False(t, machine.zero, "Zero flag should be false (5 != 3)")
+	assert.False(t, machine.negative, "Negative flag should be false (5 - 3 = 2)")
 }
