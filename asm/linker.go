@@ -21,6 +21,14 @@ import (
 	"github.com/jsando/mpu/machine"
 )
 
+// DebugInfo maps PC addresses to source locations
+type DebugInfo struct {
+	PC     uint16
+	File   string
+	Line   int
+	Column int
+}
+
 type Linker struct {
 	statements Statement
 	symbols    *SymbolTable
@@ -29,6 +37,7 @@ type Linker struct {
 	pc         int
 	code       []byte
 	patches    []patch
+	debugInfo  []DebugInfo
 }
 
 // patch is a expression with a forward reference to be resoled on pass 2
@@ -75,7 +84,7 @@ func (l *Linker) Link() {
 		case *InstructionStatement:
 			l.overrideFramePointerSymbols(t)
 			switch t.operation {
-			case TokSec, TokClc, TokSeb, TokClb, TokRet, TokRst, TokHlt:
+			case TokSec, TokClc, TokSeb, TokClb, TokRet, TokRst, TokHlt, TokSea:
 				l.doEmit0Operand(t)
 			case TokAdd, TokSub, TokMul, TokDiv, TokCmp, TokAnd, TokOr, TokXor, TokCpy:
 				l.doEmit2Operand(t)
@@ -182,6 +191,16 @@ func (l *Linker) writeWordAt(val int, pc int) {
 	hi := byte(val >> 8)
 	l.code[pc] = lo
 	l.code[pc+1] = hi
+}
+
+// recordDebugInfo records the current PC and source location
+func (l *Linker) recordDebugInfo(stmt Statement) {
+	l.debugInfo = append(l.debugInfo, DebugInfo{
+		PC:     uint16(l.pc),
+		File:   stmt.File(),
+		Line:   stmt.Line(),
+		Column: 0, // Column tracking would require lexer changes
+	})
 }
 
 func (l *Linker) doEquate(equate *EquateStatement) {
@@ -303,6 +322,7 @@ func (l *Linker) doEmit2Operand(stmt *InstructionStatement) {
 		l.errorf(stmt, "expected 2 operands")
 		return
 	}
+	l.recordDebugInfo(stmt)
 	op1 := stmt.operands[0]
 	op2 := stmt.operands[1]
 	op := tokToOp(stmt.operation)
@@ -317,6 +337,7 @@ func (l *Linker) doEmit1Operand(ins *InstructionStatement) {
 		l.errorf(ins, "expected 1 operand")
 		return
 	}
+	l.recordDebugInfo(ins)
 	op1 := ins.operands[0]
 	op := tokToOp(ins.operation)
 	if l.function != nil && op == machine.Sav {
@@ -355,6 +376,7 @@ func (l *Linker) doEmit0Operand(stmt *InstructionStatement) {
 		l.errorf(stmt, "expected 0 operands, got %d", len(stmt.operands))
 		return
 	}
+	l.recordDebugInfo(stmt)
 	op := tokToOp(stmt.operation)
 	if l.function != nil && op == machine.Ret {
 		op = machine.Rst
@@ -411,6 +433,10 @@ func (l *Linker) HasErrors() bool {
 
 func (l *Linker) Code() []byte {
 	return l.code[0 : l.pc+1]
+}
+
+func (l *Linker) DebugInfo() []DebugInfo {
+	return l.debugInfo
 }
 
 func (l *Linker) overrideFramePointerSymbols(ins *InstructionStatement) {
@@ -500,6 +526,8 @@ func tokToOp(tok TokenType) machine.OpCode {
 		op = machine.Hlt
 	case TokSav:
 		op = machine.Sav
+	case TokSea:
+		op = machine.Sea
 	default:
 		panic("unknown opcode")
 	}
