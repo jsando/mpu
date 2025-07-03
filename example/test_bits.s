@@ -7,18 +7,19 @@
 // Count set bits in a word
 //
 count_bits:
-        cpy #0, bit_count
-        cpy value, temp
+        cpy bit_count, zero
+        cpy temp, value
 count_loop:
         cmp temp, #0
         jeq count_done
         
         // Check lowest bit
-        and temp, #1, test_bit
-        add test_bit, bit_count
+        cpy test_bit, temp
+        and test_bit, one
+        add bit_count, test_bit
         
         // Shift right by dividing by 2
-        div temp, #2, temp
+        div temp, two
         jmp count_loop
 count_done:
         ret
@@ -27,19 +28,19 @@ count_done:
 // Check if number is power of 2
 //
 is_power_of_2:
-        cpy #0, is_pow2     // Default to false
+        cpy is_pow2, zero   // Default to false
         
         // Zero is not a power of 2
         cmp value, #0
         jeq pow2_done
         
         // n & (n-1) == 0 for powers of 2
-        cpy value, temp
+        cpy temp, value
         dec temp            // temp = n - 1
-        and value, temp, temp
+        and temp, value
         cmp temp, #0
         jne pow2_done
-        cpy #1, is_pow2     // It's a power of 2
+        cpy is_pow2, one    // It's a power of 2
 pow2_done:
         ret
 
@@ -48,22 +49,23 @@ pow2_done:
 //
 reverse_bits:
         seb                 // Set to byte mode
-        cpy #0, reversed
-        cpy #8, counter     // 8 bits to process
-        cpy value, temp
+        cpy reversed, zero
+        cpy counter, eight  // 8 bits to process
+        cpy temp, value
 reverse_loop:
         cmp counter, #0
         jeq reverse_done
         
         // Shift reversed left
-        mul reversed, #2, reversed
+        mul reversed, two
         
         // Add lowest bit of temp
-        and temp, #1, test_bit
-        or reversed, test_bit, reversed
+        cpy test_bit, temp
+        and test_bit, one
+        or reversed, test_bit
         
         // Shift temp right
-        div temp, #2, temp
+        div temp, two
         
         dec counter
         jmp reverse_loop
@@ -77,25 +79,25 @@ reverse_done:
 
 test TestCountBits():
         // Test 0b1010 (10) = 2 bits
-        cpy #10, value
+        cpy value, ten
         jsr count_bits
         sea
         cmp bit_count, #2
         
         // Test 0b1111 (15) = 4 bits
-        cpy #15, value
+        cpy value, fifteen
         jsr count_bits
         sea
         cmp bit_count, #4
         
         // Test 0 = 0 bits
-        cpy #0, value
+        cpy value, zero
         jsr count_bits
         sea
         cmp bit_count, #0
         
         // Test 0b10000000 (128) = 1 bit
-        cpy #128, value
+        cpy value, val_128
         jsr count_bits
         sea
         cmp bit_count, #1
@@ -103,31 +105,31 @@ test TestCountBits():
 
 test TestIsPowerOf2():
         // Test 8 (power of 2)
-        cpy #8, value
+        cpy value, eight
         jsr is_power_of_2
         sea
         cmp is_pow2, #1
         
         // Test 16 (power of 2)
-        cpy #16, value
+        cpy value, sixteen
         jsr is_power_of_2
         sea
         cmp is_pow2, #1
         
         // Test 10 (not power of 2)
-        cpy #10, value
+        cpy value, ten
         jsr is_power_of_2
         sea
         cmp is_pow2, #0
         
         // Test 0 (not power of 2)
-        cpy #0, value
+        cpy value, zero
         jsr is_power_of_2
         sea
         cmp is_pow2, #0
         
         // Test 1 (power of 2)
-        cpy #1, value
+        cpy value, one
         jsr is_power_of_2
         sea
         cmp is_pow2, #1
@@ -135,19 +137,19 @@ test TestIsPowerOf2():
 
 test TestReverseBits():
         // Test 0b10110000 -> 0b00001101
-        cpy #0xB0, value    // 176
+        cpy value, val_b0   // 176
         jsr reverse_bits
         sea
         cmp reversed, #0x0D // 13
         
         // Test 0b11111111 -> 0b11111111
-        cpy #0xFF, value
+        cpy value, val_ff
         jsr reverse_bits
         sea
         cmp reversed, #0xFF
         
         // Test 0b00000001 -> 0b10000000
-        cpy #0x01, value
+        cpy value, one
         jsr reverse_bits
         sea
         cmp reversed, #0x80
@@ -163,3 +165,15 @@ is_pow2:    dw 0
 reversed:   dw 0
 counter:    dw 0
 test_bit:   dw 0
+
+// Constants
+zero:       dw 0
+one:        dw 1
+two:        dw 2
+eight:      dw 8
+ten:        dw 10
+fifteen:    dw 15
+sixteen:    dw 16
+val_128:    dw 128
+val_b0:     dw 0xB0
+val_ff:     dw 0xFF

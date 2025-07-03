@@ -335,7 +335,26 @@ func (l *Linker) doEmit2Operand(stmt *InstructionStatement) {
 	op1 := stmt.operands[0]
 	op2 := stmt.operands[1]
 	op := tokToOp(stmt.operation)
-	opCode := machine.EncodeOp(op, op1.mode, op2.mode)
+	
+	// Catch encoding errors and report them properly
+	var opCode byte
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if err, ok := r.(string); ok && strings.Contains(err, "invalid encoding") {
+					l.errorf(stmt, "%s", err)
+				} else {
+					panic(r) // Re-panic if it's not an encoding error
+				}
+			}
+		}()
+		opCode = machine.EncodeOp(op, op1.mode, op2.mode)
+	}()
+	
+	if l.messages.errors > 0 {
+		return // Don't continue if we had an error
+	}
+	
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(stmt, op1)
 	l.resolveWordOperand(stmt, op2)
@@ -356,7 +375,26 @@ func (l *Linker) doEmit1Operand(ins *InstructionStatement) {
 	if op == machine.Pop && op1.mode == machine.Immediate {
 		op1.mode = machine.ImmediateByte
 	}
-	opCode := machine.EncodeOp(op, op1.mode, machine.Implied)
+	
+	// Catch encoding errors and report them properly
+	var opCode byte
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if err, ok := r.(string); ok && strings.Contains(err, "invalid encoding") {
+					l.errorf(ins, "%s", err)
+				} else {
+					panic(r) // Re-panic if it's not an encoding error
+				}
+			}
+		}()
+		opCode = machine.EncodeOp(op, op1.mode, machine.Implied)
+	}()
+	
+	if l.messages.errors > 0 {
+		return // Don't continue if we had an error
+	}
+	
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(ins, op1)
 }
