@@ -24,6 +24,7 @@ import (
 
 	"github.com/jsando/mpu/asm"
 	"github.com/jsando/mpu/machine"
+	"github.com/jsando/mpu/test"
 )
 
 var (
@@ -59,10 +60,16 @@ func main() {
 	rewrite := fmtCmd.Bool("w", false, "rewrite original file (not yet implemented)")
 	fmtHelp := fmtCmd.Bool("help", false, "show help for fmt command")
 
+	testCmd := flag.NewFlagSet("test", flag.ContinueOnError)
+	testVerbose := testCmd.Bool("v", false, "verbose output")
+	testColor := testCmd.Bool("color", true, "colorize output")
+	testHelp := testCmd.Bool("help", false, "show help for test command")
+
 	// Custom usage for subcommands
 	buildCmd.Usage = func() { printBuildUsage() }
 	runCmd.Usage = func() { printRunUsage() }
 	fmtCmd.Usage = func() { printFmtUsage() }
+	testCmd.Usage = func() { printTestUsage() }
 
 	if len(os.Args) <= 1 {
 		printUsage()
@@ -105,6 +112,16 @@ func main() {
 		}
 		inputs := getInputs(fmtCmd)
 		format(inputs, *rewrite)
+	case "test":
+		if err := testCmd.Parse(os.Args[2:]); err != nil {
+			os.Exit(1)
+		}
+		if *testHelp {
+			printTestUsage()
+			os.Exit(0)
+		}
+		inputs := getInputs(testCmd)
+		runTests(inputs, *testVerbose, *testColor)
 	default:
 		fmt.Fprintf(os.Stderr, "Error: unknown command '%s'\n\n", os.Args[1])
 		printUsage()
@@ -123,6 +140,7 @@ func printUsage() {
 	fmt.Println("  build    Assemble source files into binary")
 	fmt.Println("  run      Execute a program")
 	fmt.Println("  fmt      Format assembly source code")
+	fmt.Println("  test     Run unit tests in assembly files")
 	fmt.Println()
 	fmt.Println("Global Options:")
 	fmt.Println("  --help, -h     Show this help message")
@@ -185,6 +203,23 @@ func printFmtUsage() {
 	fmt.Println("Examples:")
 	fmt.Println("  mpu fmt program.s")
 	fmt.Println("  mpu fmt program.s > formatted.s")
+}
+
+func printTestUsage() {
+	fmt.Println("Usage: mpu test [options] <file.s> [<file2.s> ...]")
+	fmt.Println()
+	fmt.Println("Runs unit tests found in assembly source files.")
+	fmt.Println("Tests are defined with 'test FunctionName():' declarations.")
+	fmt.Println()
+	fmt.Println("Options:")
+	fmt.Println("  -v         Show verbose output (display all test names)")
+	fmt.Println("  -color     Colorize output (default: true)")
+	fmt.Println("  --help     Show this help message")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  mpu test tests.s")
+	fmt.Println("  mpu test -v tests/*.s")
+	fmt.Println("  mpu test -color=false tests.s > results.txt")
 }
 
 func format(inputs []*os.File, rewrite bool) {
@@ -321,4 +356,63 @@ func newTokenReader(inputs []*os.File) *asm.Input {
 		tr = append(tr, asm.NewLexer(file.Name(), file))
 	}
 	return asm.NewInput(tr)
+}
+
+func runTests(inputs []*os.File, verbose bool, color bool) {
+	// Parse all files
+	parser := asm.NewParser(newTokenReader(inputs))
+	parser.Parse()
+	parser.PrintErrors()
+	if parser.HasErrors() {
+		os.Exit(1)
+	}
+
+	// Discover tests
+	suite, err := test.DiscoverTests(parser.Statements())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error discovering tests: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(suite.Tests) == 0 {
+		fmt.Println("No tests found.")
+		return
+	}
+
+	// Link the code
+	linker := asm.NewLinker(parser.Statements())
+	linker.Link()
+	linker.PrintMessages()
+	if linker.HasErrors() {
+		os.Exit(1)
+	}
+
+	// Prepare code for execution
+	code := linker.Code()
+	if len(code) < 65536 {
+		padded := make([]byte, 65536)
+		copy(padded, code)
+		code = padded
+	}
+
+	// Create machine and executor
+	m := machine.NewMachine(code)
+	executor := test.NewTestExecutor(m, suite, linker.Symbols(), linker.DebugInfo())
+
+	// Run tests
+	err = executor.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running tests: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Format and display results
+	formatter := test.NewTerminalFormatter(verbose, color)
+	formatter.Format(executor.Results(), os.Stdout)
+
+	// Exit with appropriate code
+	_, failed := executor.Summary()
+	if failed > 0 {
+		os.Exit(1)
+	}
 }

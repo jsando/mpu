@@ -21,6 +21,14 @@ import (
 	"github.com/jsando/mpu/machine"
 )
 
+// DebugInfo maps PC addresses to source locations
+type DebugInfo struct {
+	PC     uint16
+	File   string
+	Line   int
+	Column int
+}
+
 type Linker struct {
 	statements Statement
 	symbols    *SymbolTable
@@ -29,6 +37,7 @@ type Linker struct {
 	pc         int
 	code       []byte
 	patches    []patch
+	debugInfo  []DebugInfo
 }
 
 // patch is a expression with a forward reference to be resoled on pass 2
@@ -70,12 +79,14 @@ func (l *Linker) Link() {
 			l.defineLabel(t, t.name)
 		case *FunctionStatement:
 			l.doFunction(t)
+		case *TestStatement:
+			l.doTest(t)
 		case *VarStatement:
 			// nothing to do, they are appended to the FunctionStatement
 		case *InstructionStatement:
 			l.overrideFramePointerSymbols(t)
 			switch t.operation {
-			case TokSec, TokClc, TokSeb, TokClb, TokRet, TokRst, TokHlt:
+			case TokSec, TokClc, TokSeb, TokClb, TokRet, TokRst, TokHlt, TokSea:
 				l.doEmit0Operand(t)
 			case TokAdd, TokSub, TokMul, TokDiv, TokCmp, TokAnd, TokOr, TokXor, TokCpy:
 				l.doEmit2Operand(t)
@@ -182,6 +193,16 @@ func (l *Linker) writeWordAt(val int, pc int) {
 	hi := byte(val >> 8)
 	l.code[pc] = lo
 	l.code[pc+1] = hi
+}
+
+// recordDebugInfo records the current PC and source location
+func (l *Linker) recordDebugInfo(stmt Statement) {
+	l.debugInfo = append(l.debugInfo, DebugInfo{
+		PC:     uint16(l.pc),
+		File:   stmt.File(),
+		Line:   stmt.Line(),
+		Column: 0, // Column tracking would require lexer changes
+	})
 }
 
 func (l *Linker) doEquate(equate *EquateStatement) {
@@ -298,15 +319,42 @@ func (l *Linker) doFunction(fn *FunctionStatement) {
 	l.writeByte(localSize)
 }
 
+func (l *Linker) doTest(test *TestStatement) {
+	// Test functions are just like regular functions but without parameters
+	// Define the test function label
+	l.defineLabel(test, test.name)
+	l.function = nil  // Tests don't have automatic fp handling like functions
+}
+
 func (l *Linker) doEmit2Operand(stmt *InstructionStatement) {
 	if len(stmt.operands) != 2 {
 		l.errorf(stmt, "expected 2 operands")
 		return
 	}
+	l.recordDebugInfo(stmt)
 	op1 := stmt.operands[0]
 	op2 := stmt.operands[1]
 	op := tokToOp(stmt.operation)
-	opCode := machine.EncodeOp(op, op1.mode, op2.mode)
+	
+	// Catch encoding errors and report them properly
+	var opCode byte
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if err, ok := r.(string); ok && strings.Contains(err, "invalid encoding") {
+					l.errorf(stmt, "%s", err)
+				} else {
+					panic(r) // Re-panic if it's not an encoding error
+				}
+			}
+		}()
+		opCode = machine.EncodeOp(op, op1.mode, op2.mode)
+	}()
+	
+	if l.messages.errors > 0 {
+		return // Don't continue if we had an error
+	}
+	
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(stmt, op1)
 	l.resolveWordOperand(stmt, op2)
@@ -317,6 +365,7 @@ func (l *Linker) doEmit1Operand(ins *InstructionStatement) {
 		l.errorf(ins, "expected 1 operand")
 		return
 	}
+	l.recordDebugInfo(ins)
 	op1 := ins.operands[0]
 	op := tokToOp(ins.operation)
 	if l.function != nil && op == machine.Sav {
@@ -326,7 +375,26 @@ func (l *Linker) doEmit1Operand(ins *InstructionStatement) {
 	if op == machine.Pop && op1.mode == machine.Immediate {
 		op1.mode = machine.ImmediateByte
 	}
-	opCode := machine.EncodeOp(op, op1.mode, machine.Implied)
+	
+	// Catch encoding errors and report them properly
+	var opCode byte
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if err, ok := r.(string); ok && strings.Contains(err, "invalid encoding") {
+					l.errorf(ins, "%s", err)
+				} else {
+					panic(r) // Re-panic if it's not an encoding error
+				}
+			}
+		}()
+		opCode = machine.EncodeOp(op, op1.mode, machine.Implied)
+	}()
+	
+	if l.messages.errors > 0 {
+		return // Don't continue if we had an error
+	}
+	
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(ins, op1)
 }
@@ -355,6 +423,7 @@ func (l *Linker) doEmit0Operand(stmt *InstructionStatement) {
 		l.errorf(stmt, "expected 0 operands, got %d", len(stmt.operands))
 		return
 	}
+	l.recordDebugInfo(stmt)
 	op := tokToOp(stmt.operation)
 	if l.function != nil && op == machine.Ret {
 		op = machine.Rst
@@ -411,6 +480,18 @@ func (l *Linker) HasErrors() bool {
 
 func (l *Linker) Code() []byte {
 	return l.code[0 : l.pc+1]
+}
+
+func (l *Linker) DebugInfo() []DebugInfo {
+	return l.debugInfo
+}
+
+func (l *Linker) Symbols() *SymbolTable {
+	return l.symbols
+}
+
+func (l *Linker) Messages() *Messages {
+	return l.messages
 }
 
 func (l *Linker) overrideFramePointerSymbols(ins *InstructionStatement) {
@@ -500,6 +581,8 @@ func tokToOp(tok TokenType) machine.OpCode {
 		op = machine.Hlt
 	case TokSav:
 		op = machine.Sav
+	case TokSea:
+		op = machine.Sea
 	default:
 		panic("unknown opcode")
 	}

@@ -81,6 +81,7 @@ const (
 	Sec
 	Ret
 	Rst
+	Sea
 )
 
 var mnemonics = []string{
@@ -89,7 +90,7 @@ var mnemonics = []string{
 	"inc", "dec", "psh", "pop", "jsr",
 	"jmp", "jeq", "jne", "jge", "jlt",
 	"jcc", "jcs", "sav", "seb", "clb",
-	"clc", "sec", "ret", "rst",
+	"clc", "sec", "ret", "rst", "sea",
 }
 
 func (o OpCode) String() string {
@@ -333,6 +334,7 @@ var opTable = []Encoding{
 	{op: Ret},
 	{op: Rst},
 	{op: Sav, m1: ImmediateByte},
+	{op: Sea},
 
 	0xC0: {op: Psh, m1: Indirect},
 	{op: Pop, m1: Indirect},
