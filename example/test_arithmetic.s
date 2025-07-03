@@ -8,20 +8,20 @@
 //
 test TestAddition():
         // Test 5 + 3 = 8
-        cpy five, a
-        add three, a
+        cpy a, five
+        add a, three
         sea
         cmp a, #8
         
         // Test 10 + 10 = 20
-        cpy ten, a
-        add ten, a
+        cpy a, ten
+        add a, ten
         sea
         cmp a, #20
         
         // Test 0 + 5 = 5
-        cpy zero, a
-        add five, a
+        cpy a, zero
+        add a, five
         sea
         cmp a, #5
         ret
@@ -31,20 +31,20 @@ test TestAddition():
 //
 test TestSubtraction():
         // Test 10 - 3 = 7
-        cpy ten, a
-        sub three, a
+        cpy a, ten
+        sub a, three
         sea
         cmp a, #7
         
         // Test 5 - 5 = 0
-        cpy five, a
-        sub five, a
+        cpy a, five
+        sub a, five
         sea
         cmp a, #0
         
         // Test 3 - 5 = -2
-        cpy three, a
-        sub five, a
+        cpy a, three
+        sub a, five
         sea
         cmp a, #-2
         ret
@@ -54,20 +54,20 @@ test TestSubtraction():
 //
 test TestMultiplication():
         // Test 3 * 4 = 12
-        cpy three, a
-        mul four, a
+        cpy a, three
+        mul a, four
         sea
         cmp a, #12
         
         // Test 5 * 0 = 0
-        cpy five, a
-        mul zero, a
+        cpy a, five
+        mul a, zero
         sea
         cmp a, #0
         
         // Test 7 * 1 = 7
-        cpy seven, a
-        mul one, a
+        cpy a, seven
+        mul a, one
         sea
         cmp a, #7
         ret
@@ -77,20 +77,20 @@ test TestMultiplication():
 //
 test TestDivision():
         // Test 12 / 3 = 4
-        cpy twelve, a
-        div three, a
+        cpy a, twelve
+        div a, three
         sea
         cmp a, #4
         
         // Test 7 / 1 = 7
-        cpy seven, a
-        div one, a
+        cpy a, seven
+        div a, one
         sea
         cmp a, #7
         
         // Test 15 / 5 = 3
-        cpy fifteen, a
-        div five, a
+        cpy a, fifteen
+        div a, five
         sea
         cmp a, #3
         ret
@@ -100,19 +100,19 @@ test TestDivision():
 //
 test TestIncDec():
         // Test increment
-        cpy five, a
+        cpy a, five
         inc a
         sea
         cmp a, #6
         
         // Test decrement
-        cpy ten, a
+        cpy a, ten
         dec a
         sea
         cmp a, #9
         
         // Test increment zero
-        cpy zero, a
+        cpy a, zero
         inc a
         sea
         cmp a, #1

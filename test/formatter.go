@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 // Formatter is an interface for formatting test results.
@@ -60,7 +61,7 @@ func (f *TerminalFormatter) Format(results []TestResult, w io.Writer) error {
 			} else {
 				fmt.Fprintf(w, "✗ %s\n", result.Name)
 			}
-			if f.Verbose && result.Message != "" {
+			if result.Message != "" && (f.Verbose || strings.Contains(result.Message, "runtime error")) {
 				fmt.Fprintf(w, "  %s\n", result.Message)
 			}
 			
@@ -87,8 +88,11 @@ func (f *TerminalFormatter) Format(results []TestResult, w io.Writer) error {
 						}
 					}
 					
-					fmt.Fprintf(w, "\n  Expected: %d\n", detail.Expected)
-					fmt.Fprintf(w, "  Actual:   %d\n", detail.Actual)
+					// Only show expected/actual for assertion failures
+					if !strings.Contains(result.Message, "runtime error") {
+						fmt.Fprintf(w, "\n  Expected: %d\n", detail.Expected)
+						fmt.Fprintf(w, "  Actual:   %d\n", detail.Actual)
+					}
 				}
 			}
 		}

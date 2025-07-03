@@ -46,6 +46,7 @@ type TestExecutor struct {
 	symbols   *asm.SymbolTable
 	debugInfo []asm.DebugInfo
 	results   []TestResult
+	lastError *TestResult
 }
 
 // NewTestExecutor creates a new test executor.
@@ -101,9 +102,48 @@ func (e *TestExecutor) runTest(test TestInfo) TestResult {
 	// Save initial assertion count
 	initialFailures := e.machine.AssertionFailures()
 
-	// Call the test function
+	// Call the test function with panic recovery
 	testAddr := uint16(symbol.Value())
-	e.callAddress(testAddr)
+	
+	// Recover from panics during test execution
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Find the PC where the error occurred
+				pc := e.machine.Memory().GetWord(machine.PCAddr)
+				file, line := e.findSourceLocation(pc)
+				
+				var msg string
+				switch err := r.(type) {
+				case error:
+					msg = err.Error()
+				default:
+					msg = fmt.Sprintf("%v", r)
+				}
+				
+				// Store the error for later retrieval
+				e.lastError = &TestResult{
+					Name:    test.Name,
+					Passed:  false,
+					Message: fmt.Sprintf("runtime error: %s", msg),
+					FailureDetails: []AssertionDetail{{
+						PC:   pc,
+						File: file,
+						Line: line,
+					}},
+				}
+			}
+		}()
+		
+		e.callAddress(testAddr)
+	}()
+	
+	// If we caught a panic, return the error result
+	if e.lastError != nil {
+		result := *e.lastError
+		e.lastError = nil
+		return result
+	}
 
 	// Call teardown if exists
 	if e.suite.TeardownFn != "" {
