@@ -149,7 +149,7 @@ WavNewGame:     db "wav/win-00.wav",0
 
 DebugHere:  dw 0x0101           // Quick way to trace execution by printing stuff :)
             dw buffer
-.buffer     db "here\n",0
+.buffer:     db "here\n",0
 
 LineScoreTable:
             dw 0, 100, 200, 500, 2000
@@ -213,7 +213,7 @@ ResetEnd:
 Main():
             jsr InitScreen
             jsr NewGame
-.loop
+.loop:
             jsr PollEvents
             jsr DrawScreen
             cmp QuitFlag, #0
@@ -235,84 +235,84 @@ InitScreen():
             cpy IO_REQUEST, #loadWav
             ret
 
-.init       dw 0x0201
+.init:       dw 0x0201
             dw SCREEN_WIDTH
             dw SCREEN_HEIGHT
             dw title
-.title      db "MPU Blocks", 0
-.initAudio  dw 0x020a
-.loadWav    dw 0x020b
-.wavptr     dw 0
+.title:      db "MPU Blocks", 0
+.initAudio:  dw 0x020a
+.loadWav:    dw 0x020b
+.wavptr:     dw 0
 
 PollEvents():
-.loop
+.loop:
             cpy IO_REQUEST, #poll
             cmp poll_event, #SDL_QUIT
             jne isKeyDown
             cpy QuitFlag, #1
             jmp exit
-.isKeyDown
+.isKeyDown:
             cmp poll_event, #SDL_KEYDOWN
             jne isKeyUp
             psh keycode
             jsr OnKeyDown
             pop #2
             jmp loop
-.isKeyUp
+.isKeyUp:
             cmp poll_event, #SDL_KEYUP
             jne isNoMore
             psh keycode
             jsr OnKeyUp
             pop #2
             jmp loop
-.isNoMore
+.isNoMore:
             cmp poll_event, #0
             jne loop
 
             cmp KeyEscDown, #1
             jne exit
             cpy QuitFlag, #1
-.exit            
+.exit:
             ret
 
-.poll       dw 0x0202           
-.poll_event dw 0                
-.poll_time  dw 0                
-.keycode
-.poll_data  ds 8                
+.poll:       dw 0x0202
+.poll_event:dw 0
+.poll_time:  dw 0
+.keycode:
+.poll_data: ds 8
 
 OnKeyDown(keycode word):
             var tabptr word
 
             cpy tabptr, #KeyTable
-.loop            
+.loop:
             cmp *tabptr, #0
             jeq done
             cmp *tabptr, keycode
             jeq keyFound
             add tabptr, #4
             jmp loop
-.keyFound
+.keyFound:
             add tabptr, #2
             cpy *tabptr, #1
-.done
+.done:
             ret
 
 OnKeyUp(keycode word):
             var tabptr word
 
             cpy tabptr, #KeyTable
-.loop            
+.loop:
             cmp *tabptr, #0
             jeq done
             cmp *tabptr, keycode
             jeq keyFound
             add tabptr, #4
             jmp loop
-.keyFound
+.keyFound:
             add tabptr, #2
             cpy *tabptr, #0
-.done
+.done:
             ret
 
 DrawScreen():
@@ -333,17 +333,17 @@ DrawScreen():
             jsr CreatePiece
             cmp Piece, #255
             jeq showGameOver
-.noNewPiece
+.noNewPiece:
             jsr DrawPieces
             jsr UpdateGame
             jmp done
-.showGameOver
+.showGameOver:
             // In game-over mode
             cmp OutroFlag, #0
             jeq drawGameOver
             cpy OutroFlag, #0
             cpy IO_REQUEST, #gameOverSound
-.drawGameOver
+.drawGameOver:
             cpy IO_REQUEST, #ColorWhite
             cpy tx, #GameOverX
             cpy ty, #GameOverY
@@ -353,28 +353,28 @@ DrawScreen():
             cmp KeySpaceDown, #1
             jne done
             jsr NewGame
-.done            
+.done:
             cpy IO_REQUEST, #present
             ret
 
             // device request to clear screen
-.clear      dw 0x0204
+.clear:      dw 0x0204
 
             // device request to present backbuffer to screen
-.present    dw 0x0203
+.present:    dw 0x0203
             dw 10               // delay ms
 
-.boardRect  dw 0x0208
+.boardRect:  dw 0x0208
             dw BOARD_X + CELL_SIZE / 2
             dw BOARD_Y + CELL_SIZE / 2
             dw BOARD_WIDTH - CELL_SIZE - 1
             dw BOARD_HEIGHT - CELL_SIZE - 1
-.boardRect2  dw 0x0207
+.boardRect2:  dw 0x0207
             dw BOARD_X + CELL_SIZE / 2
             dw BOARD_Y + CELL_SIZE / 2
             dw BOARD_WIDTH - CELL_SIZE - 1
             dw BOARD_HEIGHT - CELL_SIZE - 1
-.gameOverSound  dw 0x020c
+.gameOverSound:  dw 0x020c
             dw WavGameOver
 
 DrawScore():
@@ -427,21 +427,21 @@ DrawScore():
 .lines_y     = level_y + LCD_LINE_SPACE + 5
 .score_y     = lines_y + LCD_LINE_SPACE + 5
 
-.level_string   db  "LEVEL ",0
-.lines_string   db  "LINES ",0
-.score_string   db  "SCORE ",0
+.level_string:   db  "LEVEL ",0
+.lines_string:   db  "LINES ",0
+.score_string:   db  "SCORE ",0
 
-.level_rect dw 0x0208
+.level_rect: dw 0x0208
             dw text_x - 10
             dw level_y - 3
             dw 12 * LCD_CHAR_SPACE
             dw LCD_LINE_SPACE
-.lines_rect dw 0x0208
+.lines_rect: dw 0x0208
             dw text_x - 10
             dw lines_y - 3
             dw 12 * LCD_CHAR_SPACE
             dw LCD_LINE_SPACE
-.score_rect dw 0x0208
+.score_rect: dw 0x0208
             dw text_x - 10
             dw score_y - 3
             dw 12 * LCD_CHAR_SPACE
@@ -455,7 +455,7 @@ Draw5Digit(value word):
 
             cpy first, #0
             cpy divisor, #10000
-.loop
+.loop:
             cpy t1, value
             div t1, divisor
             cpy t2, t1
@@ -470,10 +470,10 @@ Draw5Digit(value word):
             jne fgColor
             cpy IO_REQUEST, #ColorGrey
             jmp printChar
-.fgColor
+.fgColor:
             cpy first, #1
             cpy IO_REQUEST, #ColorScoreFG
-.printChar
+.printChar:
             add t1, #0x10
             psh t1
             jsr DrawCharacter
@@ -483,7 +483,7 @@ Draw5Digit(value word):
             jeq done
             div divisor, #10
             jne loop
-.done
+.done:
             ret
 
 DrawBoard():
@@ -496,9 +496,9 @@ DrawBoard():
             var t1 word
 
             cpy i, #1
-.iLoop
+.iLoop:
             cpy j, #4
-.jLoop
+.jLoop:
             cpy x, i
             mul x, #CELL_SIZE
             add x, #BOARD_X
@@ -533,9 +533,9 @@ DrawBoard():
             jlt iLoop
             ret
 
-.fillRect   dw 0x0208
-.fillX      dw 0
-.fillY      dw 0
+.fillRect:   dw 0x0208
+.fillX:      dw 0
+.fillY:      dw 0
             dw CELL_SIZE-2
             dw CELL_SIZE-2
 
@@ -549,7 +549,7 @@ NewGame():
             // Clear the game board
             cpy from, #ResetBoard
             cpy to, #GameBoard
-.initBoardLoop    
+.initBoardLoop:
             cpy *to, *from
             add to, #2
             add from, #2
@@ -583,7 +583,7 @@ NewGame():
             pop NextPiece3
             ret
 
-.newGameSound  dw 0x020c
+.newGameSound:  dw 0x020c
             dw WavNewGame
 
 CreatePiece():
@@ -610,7 +610,7 @@ CreatePiece():
             pop valid
             jne done
             cpy Piece, #255
-.done            
+.done:
             ret
 
 IsValid(valid word):
@@ -638,7 +638,7 @@ IsValid(valid word):
 
             cpy i, #1
             cpy mask, #1
-.loop           
+.loop:
             cpy t1, block
             and t1, mask
             jeq row
@@ -654,25 +654,25 @@ IsValid(valid word):
             jeq row
             cpy valid, #0
             ret
-.row
+.row:
             cmp i, #4
             jeq horiz
             cmp i, #8
             jeq horiz
             cmp i, #12
             jne vert
-.horiz
+.horiz:
             sub bx, #3
             inc by
             jmp endloop
-.vert
+.vert:
             inc bx
-.endloop
+.endloop:
             mul mask, #2
             inc i
             cmp i, #15
             jlt loop
-.done
+.done:
             cpy valid, #1
             ret
 
@@ -691,11 +691,11 @@ UpdateGame():
             cmp PieceX, #33
             jlt checkRight
             sub PieceX, #8
-.checkRight
+.checkRight:
             cmp KeyLDown, #1
             jne bumpY
             add PieceX, #8
-.bumpY
+.bumpY:
             cpy t1, Level
             mul t1, #3
             add t1, #2
@@ -704,12 +704,12 @@ UpdateGame():
             cmp KeyKDown, #1
             jne checkSpace
             add PieceY, #54
-.checkSpace            
+.checkSpace:
             cmp KeySpaceDown, #0
             jne rotate
             cpy SpaceWait, #0
             jmp checkValid
-.rotate
+.rotate:
             cmp SpaceWait, #0
             jne checkValid
             cpy SpaceWait, #1
@@ -717,7 +717,7 @@ UpdateGame():
             cmp Rotation, #4
             jlt checkValid
             cpy Rotation, #0
-.checkValid 
+.checkValid:
             psh #0
             jsr IsValid
             pop t1
@@ -734,23 +734,23 @@ UpdateGame():
             jsr StampyTown
             jsr CollapseRows
             jmp done
-.invalid2
+.invalid2:
             cmp PieceX, oldx
             jeq else
             cmp Rotation, oldr
             jeq else
             cpy PieceX, oldx
             jmp checkValid
-.else
+.else:
             cmp Rotation, oldr
             jeq movingOn
             // todo: play sound then fall through
-.movingOn
+.movingOn:
             cpy PieceX, oldx
             cpy Rotation, oldr
             cmp PieceY, oldy
             jne checkValid
-.done            
+.done:
             ret
 
 StampyTown():
@@ -780,7 +780,7 @@ StampyTown():
 
             cpy i, #1
             cpy mask, #1
-.loop           
+.loop:
             cpy t1, block
             and t1, mask
             jeq row
@@ -794,20 +794,20 @@ StampyTown():
             add ptr, #GameBoard
             cpy *ptr, Piece
             inc *ptr
-.row
+.row:
             cmp i, #4
             jeq horiz
             cmp i, #8
             jeq horiz
             cmp i, #12
             jne vert
-.horiz
+.horiz:
             sub bx, #3
             inc by
             jmp endloop
-.vert
+.vert:
             inc bx
-.endloop
+.endloop:
             mul mask, #2
             inc i
             cmp i, #15
@@ -816,7 +816,7 @@ StampyTown():
             // todo bonus time
             ret
 
-.dropSound  dw 0x020c
+.dropSound:  dw 0x020c
             dw WavDropBlock
 
 CollapseRows():
@@ -832,7 +832,7 @@ var t1          word
             cpy by, PieceY
             div by, #COORD_SCALE
             cpy j, #0
-.loop           
+.loop:
             cmp by, #24
             jeq updateScore
 
@@ -843,7 +843,7 @@ var t1          word
             add ptr, #GameBoard
             add ptr, #2         // skip left column
             cpy i, #10
-.countLoop  
+.countLoop:
             cmp *ptr, #0
             jeq nextRow
             add ptr, #2          
@@ -861,9 +861,9 @@ var t1          word
             add t1, #GameBoard
             add t1, #2       
             cpy k, by           // loop from by to 2 step -1  
-.collapseLoop
+.collapseLoop:
             cpy i, #10
-.copyRow
+.copyRow:
             cpy *ptr, *t1
             add ptr, #2
             add t1, #2
@@ -874,17 +874,17 @@ var t1          word
             dec k
             cmp k, #2
             jge collapseLoop
-.nextRow
+.nextRow:
             inc by
             inc j
             cmp j, #4
             jge updateScore
             jmp loop
-.updateScore
+.updateScore:
             cmp total_line, #1
             jlt noscore
             cpy IO_REQUEST, #lineSound
-.noscore
+.noscore:
             cpy ptr, total_line
             mul ptr, #2
             add ptr, #LineScoreTable
@@ -896,12 +896,12 @@ var t1          word
             jlt done
             inc Level
             cpy IO_REQUEST, #levelUpSound
-.done            
+.done:
             ret
 
-.lineSound dw 0x020c
+.lineSound: dw 0x020c
             dw WavLineScore
-.levelUpSound dw 0x020c
+.levelUpSound: dw 0x020c
             dw WavLevelUp
 
 DrawPiece(x word, y word, piece word, rotation word):
@@ -928,7 +928,7 @@ DrawPiece(x word, y word, piece word, rotation word):
 
             cpy i, #1
             cpy mask, #1
-.loop           
+.loop:
             cpy t1, block
             and t1, mask
             jeq row
@@ -936,30 +936,30 @@ DrawPiece(x word, y word, piece word, rotation word):
             cpy fillX, x
             cpy fillY, y
             cpy IO_REQUEST, #fillRect
-.row
+.row:
             cmp i, #4
             jeq horiz
             cmp i, #8
             jeq horiz
             cmp i, #12
             jne vert
-.horiz
+.horiz:
             sub x, #CELL_SIZE*3
             add y, #CELL_SIZE
             jmp endloop
-.vert
+.vert:
             add x, #CELL_SIZE
-.endloop
+.endloop:
             mul mask, #2
             inc i
             cmp i, #15
             jlt loop
-.done
+.done:
             ret
 
-.fillRect   dw 0x0208
-.fillX      dw 0
-.fillY      dw 0
+.fillRect:   dw 0x0208
+.fillX:      dw 0
+.fillY:      dw 0
             dw CELL_SIZE-2
             dw CELL_SIZE-2
 
@@ -998,12 +998,12 @@ DrawPieces():
             cmp t1, PieceDX
             jge incdx
             sub PieceDX, #8
-.incdx            
+.incdx:
             // if dx < (px / COORD_SCALE * COORD_SCALE) then dx = dx + 32
             cmp PieceDX, t1
             jge draw1
             add PieceDX, #8
-.draw1
+.draw1:
             // x = dx * CELL_SIZE / COORD_SCALE + BOARD_LEFT
             // y = py * CELL_SIZE / COORD_SCALE + BOARD_TOP - CELL_SIZE - 1
             cpy t1, PieceDX

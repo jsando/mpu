@@ -13,13 +13,13 @@ sqrt(res word, n word):
             cpy x, n
             cpy c, #0
             cpy d, #0b0100_0000_0000_0000
-.loop1
+.loop1:
             cmp d, n
             jlt loop2
             jeq loop2
             div d, #4
             jmp loop1
-.loop2
+.loop2:
             cmp d, #0
             jeq done
             cpy t1, c
@@ -30,12 +30,12 @@ sqrt(res word, n word):
             div c, #2
             add c, d
             jmp next
-.else
+.else:
             div c, #2
-.next
+.next:
             div d, #4
             jmp loop2            
-.done
+.done:
             cpy res, c
             ret                        
 

@@ -74,7 +74,7 @@ a:		dw 0
 	assert.False(t, linker.HasErrors())
 
 	debugInfo := linker.DebugInfo()
-	
+
 	// Find debug info for each instruction
 	var clcInfo, seaInfo, cmpInfo *DebugInfo
 	for i := range debugInfo {

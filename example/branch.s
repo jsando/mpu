@@ -12,7 +12,7 @@ fill_memory(start word, end word, value word):
     var ptr word
 
     cpy ptr, start
-.loop
+.loop:
     cpy *ptr, value
     inc ptr
     cmp ptr, end
@@ -21,5 +21,5 @@ fill_memory(start word, end word, value word):
     db 0
     db 0
     db 0
-.skip
+.skip:
     ret

@@ -670,7 +670,6 @@ Example:
     include "strconv.s"
     include "random.s"
 ```
-
 ## Assembly Grammar
 
 line :=
@@ -680,50 +679,78 @@ line :=
     |   instruction
     |   function
     |   test
-    |   vardecl
+    |   variable_declaration
+    |   directive
     |   include
 
 include :=
         'include' "path"
 
-label := 
-        ident ':'
-    |   '.' ident ':'
+label :=
+        identifier ':'
+    |   '.' identifier ':'
 
-equate := 
-        ident '=' expr
-    |   '.' ident '=' expr
+equate :=
+        identifier '=' expr
+    |   '.' identifier '=' expr
 
 function :=
-        ident '(' param-list ')' ':'
+        identifier '(' param-list ')' ':'
 
 test :=
-        'test' ident '(' ')' ':'
+        'test' identifier '(' ')' ':'
 
-vardecl :=
-        'var' ident ['byte' | 'word']
+variable_declaration :=
+        'var' identifier ['byte' | 'word']
+
+directive :=
+        'org' expr
+        |   'db' expr-list
+        |   'dw' expr-list
+        |   'ds' expr
 
 instruction :=
-        keyword [operand[,operand]*]
+        opcode [operand [,operand]*]
 
-Operand  :=
+operand  :=
       '#' expr
     | '*' expr
     | expr
 
 expr :=
-    MulExpr [ ('+' | '-' | '|' | '^') MulExpr]*
+    mul-expr [ ('+' | '-' | '|' | '^') mul-expr]*
 
-MulExpr :=
-    UnaryExpr ['*' | '/' | '%' | '<<' | '>>'  UnaryExpr]*
+mul-expr :=
+    unary-expr ['*' | '/' | '%' | '<<' | '>>'  unary-expr]*
 
-UnaryExpr :=
-    ['+' | '-'] PrimaryExpr
+unary-expr :=
+    ['+' | '-'] primary-expr
 
-PrimaryExpr :=
+primary-expr :=
       '(' expr ')'
-    | Identifier
-    | Literal (int, String, Char)
+    | identifier
+    | integer
+    | string
+    | char
+
+expr-list :=
+    expr [',' expr]*
+
+comment := '//' {any-char} newline
+
+identifier := letter {letter | digit | '-' | '_'}
+
+integer := decimal-literal | hex-literal | binary-literal | char-literal
+
+decimal-literal := digit {digit | '_'}
+
+hex-literal := '0x' hex-digit {hex-digit | '_'}
+
+binary-literal := '0b' ('0' | '1') {('0' | '1') | '_'}
+
+char-literal := "'" char "'"
+
+string := '"' {string-char} '"'
 
 ## Background
 

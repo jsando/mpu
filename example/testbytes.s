@@ -11,7 +11,7 @@ main():
 
     cpy p1, #s1
     cpy p2, #s2
-.loop
+.loop:
     seb
     cpy *p2, *p1
     jeq done
@@ -19,6 +19,6 @@ main():
     inc p1
     inc p2
     jmp loop
-.done
+.done:
     clb
     hlt

@@ -62,7 +62,7 @@ test TestPassing():
 		ret
 `
 	m, symbols, debugInfo := compileAndLoad(t, source)
-	
+
 	suite := &TestSuite{
 		Tests: []TestInfo{{
 			Name:     "TestPassing",
@@ -93,7 +93,7 @@ test TestFailing():
 		ret
 `
 	m, symbols, debugInfo := compileAndLoad(t, source)
-	
+
 	suite := &TestSuite{
 		Tests: []TestInfo{{
 			Name:     "TestFailing",
@@ -134,7 +134,7 @@ test TestFail():
 		ret
 `
 	m, symbols, debugInfo := compileAndLoad(t, source)
-	
+
 	// Discover tests from the source
 	parser := asm.NewParserFromReader("test.s", strings.NewReader(source))
 	parser.Parse()
@@ -146,7 +146,7 @@ test TestFail():
 
 	results := executor.Results()
 	assert.Len(t, results, 3)
-	
+
 	passed, failed := executor.Summary()
 	assert.Equal(t, 2, passed)
 	assert.Equal(t, 1, failed)

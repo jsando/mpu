@@ -16,7 +16,7 @@ main():
         var i word
 
         cpy i, #1
-.loop
+.loop:
         psh i
         jsr PrintInteger
         pop #2

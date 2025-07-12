@@ -38,13 +38,11 @@ const welcome = `
 `
 
 /*
-
 d/dump [start [end]]
 l/list [start]
 run address
 s/step [address]
 set [address value [value]*]
-
 */
 func (m *Monitor) Run() {
 	fmt.Printf(welcome)

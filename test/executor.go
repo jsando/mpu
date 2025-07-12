@@ -104,7 +104,7 @@ func (e *TestExecutor) runTest(test TestInfo) TestResult {
 
 	// Call the test function with panic recovery
 	testAddr := uint16(symbol.Value())
-	
+
 	// Recover from panics during test execution
 	func() {
 		defer func() {
@@ -112,7 +112,7 @@ func (e *TestExecutor) runTest(test TestInfo) TestResult {
 				// Find the PC where the error occurred
 				pc := e.machine.Memory().GetWord(machine.PCAddr)
 				file, line := e.findSourceLocation(pc)
-				
+
 				var msg string
 				switch err := r.(type) {
 				case error:
@@ -120,7 +120,7 @@ func (e *TestExecutor) runTest(test TestInfo) TestResult {
 				default:
 					msg = fmt.Sprintf("%v", r)
 				}
-				
+
 				// Store the error for later retrieval
 				e.lastError = &TestResult{
 					Name:    test.Name,
@@ -134,10 +134,10 @@ func (e *TestExecutor) runTest(test TestInfo) TestResult {
 				}
 			}
 		}()
-		
+
 		e.callAddress(testAddr)
 	}()
-	
+
 	// If we caught a panic, return the error result
 	if e.lastError != nil {
 		result := *e.lastError
@@ -166,7 +166,7 @@ func (e *TestExecutor) runTest(test TestInfo) TestResult {
 				Line:     line,
 			})
 		}
-		
+
 		return TestResult{
 			Name:           test.Name,
 			Passed:         false,
@@ -197,7 +197,7 @@ func (e *TestExecutor) callFunction(name string) error {
 	if symbol == nil {
 		return fmt.Errorf("function '%s' not found", name)
 	}
-	
+
 	addr := uint16(symbol.Value())
 	e.callAddress(addr)
 	return nil
@@ -207,16 +207,16 @@ func (e *TestExecutor) callFunction(name string) error {
 func (e *TestExecutor) callAddress(addr uint16) {
 	// Get current PC
 	pc := e.machine.Memory().GetWord(machine.PCAddr)
-	
+
 	// Push return address (current PC + 3 for JSR instruction)
 	sp := e.machine.Memory().GetWord(machine.SPAddr)
 	sp -= 2
 	e.machine.Memory().PutWord(sp, pc+3)
 	e.machine.Memory().PutWord(machine.SPAddr, sp)
-	
+
 	// Jump to test function
 	e.machine.Memory().PutWord(machine.PCAddr, addr)
-	
+
 	// Run until RET
 	e.machine.Run()
 }

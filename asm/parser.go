@@ -391,6 +391,8 @@ func (p *Parser) parseLocalSymbol() {
 		p.skipToEOL()
 		return
 	}
+	text := p.lexer.TokenText()
+	line := p.lexer.Line()
 	id := p.global + "." + p.lexer.TokenText()
 	p.lexer.Next()
 
@@ -401,11 +403,17 @@ func (p *Parser) parseLocalSymbol() {
 		p.addStatement(stmt)
 		p.lexer.Next()
 		stmt.value = p.parseExpr()
-	} else {
+	} else if p.lexer.Token() == TokColon {
 		stmt := &LabelStatement{
 			name: id,
 		}
 		p.addStatement(stmt)
+		p.lexer.Next()
+	} else {
+		// Report error at the saved line number
+		p.errorAtf(line, "expected '=' or ':' after identifier '%s'", text)
+		// Skip to end of line for error recovery
+		p.skipToEOL()
 	}
 }
 

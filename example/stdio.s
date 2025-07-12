@@ -13,19 +13,19 @@ PrintInteger(value word):
         pop #2
         cpy 6, #ioPrintReq
         ret
-.ioPrintReq
+.ioPrintReq:
         dw 0x0101   // stdout putchars
         dw 0        // pointer to zero terminated string
 .BUFSIZE    =   7
-.buffer ds BUFSIZE
+.buffer: ds BUFSIZE
 
 Println():
         cpy 6, #ioPrintReq
         ret
-.ioPrintReq
+.ioPrintReq:
         dw 0x0101   // stdout putchars
         dw lf        // pointer to zero terminated string
-.lf     db 0x0a, 0x00
+.lf:     db 0x0a, 0x00
 
 //
 // Print the given value as a 4-digit hexadecimal number.
@@ -56,10 +56,10 @@ PrintHex(hi byte, lo byte):
                 clb
                 cpy 6, #ioPrintReq
                 ret
-.ioPrintReq
+.ioPrintReq:
                 dw 0x0101       // stdout putchars
                 dw buffer       // pointer to zero terminated string
-.buffer         db "0x0000", 0
+.buffer:         db "0x0000", 0
 
 ToHex(value word):
                 and value, #0x0f
@@ -68,5 +68,5 @@ ToHex(value word):
                 sub value, #0x0a
                 add value, #'a'
                 ret
-.number         add value, #'0'
+.number:         add value, #'0'
                 ret
