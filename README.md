@@ -558,12 +558,12 @@ Local labels are prefixed with '.' and are scoped to the previous symbol.  This 
 
 ```
 foo:
-.loop
-.exit
+.loop:
+.exit:
 
 bar:
-.loop
-.exit
+.loop:
+.exit:
 ```
 
 ## Functions & Variables
