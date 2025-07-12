@@ -1,9 +1,9 @@
 //---------------------------------------------------------
 //  Print a random number between 0 and 100.
 //---------------------------------------------------------
-        import "stdio"
-        import "strconv"
-        import "random"
+        include "stdio.s"
+        include "strconv.s"
+        include "random.s"
         
 		dw main
 

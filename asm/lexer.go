@@ -83,7 +83,7 @@ const (
 	TokHlt
 	TokSea
 	TokFunction
-	TokImport
+	TokInclude
 	TokVar
 	TokTest
 	TokComment
@@ -104,7 +104,7 @@ var tokenImage = []string{
 	"jlt", "inc", "dec", "jsr", "ret",
 	"clc", "sec", "clb", "seb", "jcc",
 	"jcs", "sav", "rst", "hlt", "sea",
-	"function()", "import", "var", "test",
+	"function()", "include", "var", "test",
 	"<comment>", "<eol>",
 }
 
@@ -128,13 +128,13 @@ type TokenReader interface {
 // in order because the first source file will establish the org,
 // all others must be libraries with relocatable code.
 type Input struct {
-	tr      []TokenReader
-	imports map[string]bool
-	files   []string // file names, in the order they were processed
+	tr       []TokenReader
+	includes map[string]bool
+	files    []string // file names, in the order they were processed
 }
 
 func NewInput(readers []TokenReader) *Input {
-	inp := &Input{imports: make(map[string]bool)}
+	inp := &Input{includes: make(map[string]bool)}
 	for _, r := range readers {
 		inp.Append(r)
 	}
@@ -142,9 +142,9 @@ func NewInput(readers []TokenReader) *Input {
 }
 
 func (i *Input) Append(r TokenReader) {
-	if !i.imports[r.FileName()] {
+	if !i.includes[r.FileName()] {
 		i.tr = append(i.tr, r)
-		i.imports[r.FileName()] = true
+		i.includes[r.FileName()] = true
 		i.files = append(i.files, r.FileName())
 	}
 }

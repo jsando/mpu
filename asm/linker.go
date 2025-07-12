@@ -71,7 +71,7 @@ func (l *Linker) Link() {
 			l.doDefineWord(t)
 		case *DefineSpaceStatement:
 			l.doDefineSpace(t)
-		case *ImportStatement:
+		case *IncludeStatement:
 			// nothing to do
 		case *OrgStatement:
 			l.doOrg(t)
@@ -323,7 +323,7 @@ func (l *Linker) doTest(test *TestStatement) {
 	// Test functions are just like regular functions but without parameters
 	// Define the test function label
 	l.defineLabel(test, test.name)
-	l.function = nil  // Tests don't have automatic fp handling like functions
+	l.function = nil // Tests don't have automatic fp handling like functions
 }
 
 func (l *Linker) doEmit2Operand(stmt *InstructionStatement) {
@@ -335,7 +335,7 @@ func (l *Linker) doEmit2Operand(stmt *InstructionStatement) {
 	op1 := stmt.operands[0]
 	op2 := stmt.operands[1]
 	op := tokToOp(stmt.operation)
-	
+
 	// Catch encoding errors and report them properly
 	var opCode byte
 	func() {
@@ -350,11 +350,11 @@ func (l *Linker) doEmit2Operand(stmt *InstructionStatement) {
 		}()
 		opCode = machine.EncodeOp(op, op1.mode, op2.mode)
 	}()
-	
+
 	if l.messages.errors > 0 {
 		return // Don't continue if we had an error
 	}
-	
+
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(stmt, op1)
 	l.resolveWordOperand(stmt, op2)
@@ -375,7 +375,7 @@ func (l *Linker) doEmit1Operand(ins *InstructionStatement) {
 	if op == machine.Pop && op1.mode == machine.Immediate {
 		op1.mode = machine.ImmediateByte
 	}
-	
+
 	// Catch encoding errors and report them properly
 	var opCode byte
 	func() {
@@ -390,11 +390,11 @@ func (l *Linker) doEmit1Operand(ins *InstructionStatement) {
 		}()
 		opCode = machine.EncodeOp(op, op1.mode, machine.Implied)
 	}()
-	
+
 	if l.messages.errors > 0 {
 		return // Don't continue if we had an error
 	}
-	
+
 	l.writeByte(int(opCode))
 	l.resolveWordOperand(ins, op1)
 }

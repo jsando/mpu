@@ -233,7 +233,7 @@ func format(inputs []*os.File, rewrite bool) {
 	}
 	lexer := asm.NewLexer(inputs[0].Name(), inputs[0])
 	parser := asm.NewParser(asm.NewInput([]asm.TokenReader{lexer}))
-	parser.SetProcessImport(false)
+	parser.SetProcessInclude(false)
 	parser.Parse()
 	parser.PrintErrors()
 	if parser.HasErrors() {
@@ -246,13 +246,13 @@ func format(inputs []*os.File, rewrite bool) {
 func getInputs(flagSet *flag.FlagSet) []*os.File {
 	var inputs []*os.File
 	args := flagSet.Args()
-	
+
 	if len(args) == 0 {
 		fmt.Fprintf(os.Stderr, "Error: no input files specified\n\n")
 		flagSet.Usage()
 		os.Exit(1)
 	}
-	
+
 	for _, name := range args {
 		f, err := os.Open(name)
 		if err != nil {

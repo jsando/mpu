@@ -14,10 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-            import "random"
-            import "lcd"
-            import "stdio"
-            import "strconv"
+            include "random.s"
+            include "lcd.s"
+            include "stdio.s"
+            include "strconv.s"
 
             org 0
             dw Main

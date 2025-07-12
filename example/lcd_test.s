@@ -1,6 +1,6 @@
 // Test driver for lcd
 
-            import "lcd"
+            include "lcd.s"
 
             dw main
 

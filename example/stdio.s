@@ -1,4 +1,4 @@
-        import "strconv"
+        include "strconv.s"
 
 //
 // Print the word passed on the stack to stdout in decimal.

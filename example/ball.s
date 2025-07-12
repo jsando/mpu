@@ -3,9 +3,9 @@
 // dx/dy as vectors with a separate speed, and normalizing
 // the vector.
 
-            import "random"
-            import "stdio"
-            import "sqrt"
+            include "random.s"
+            include "stdio.s"
+            include "sqrt.s"
 
             org 0
 REG_PC:     dw main

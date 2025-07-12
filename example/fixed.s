@@ -1,7 +1,7 @@
 // Testing 12.4 fixed point math, with a print routine to debug.
 
-            import "stdio"
-            import "sqrt"
+            include "stdio.s"
+            include "sqrt.s"
 
             org 0
             dw main

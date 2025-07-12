@@ -84,7 +84,7 @@ type (
 		origin Expr
 	}
 
-	ImportStatement struct {
+	IncludeStatement struct {
 		Node
 		path string
 	}

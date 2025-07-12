@@ -22,9 +22,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-            import "random"
-            import "lcd"
-            import "strconv"
+            include "random.s"
+            include "lcd.s"
+            include "strconv.s"
 
                 // The initial program counter needs to point to the entry point at startup.
                 // The rest of the special mem area ($00-$0f) can be left zero on startup.

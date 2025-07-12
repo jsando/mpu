@@ -658,15 +658,17 @@ For example to declare a global variable 'MyVar' that holds a word, with initial
 MyVar:  dw 5            // Emits bytes 0x05 0x00
 ```
 
-## Import
+## include
 
-Use the 'import' directive to append another assembly source file to the end of the current one, if it hasn't already been included.  It is like 'include' except it always appends the given path after processing the current source file.
+Use the 'include' directive to append another assembly source file to the end of the current one, if it hasn't already been included.  It always appends the given path after processing the current source file.
+
+Paths are resolved relative to the current file.
 
 Example:
 
 ```
-    import "strconv.s"
-    import "random.s"
+    include "strconv.s"
+    include "random.s"
 ```
 
 ## Assembly Grammar
@@ -674,23 +676,23 @@ Example:
 line :=
         label
     |   label instruction
+    |   equate
     |   instruction
     |   function
     |   test
-    |   equate
     |   vardecl
-    |   import
+    |   include
 
-import :=
-        'import' string
+include :=
+        'include' "path"
 
 label := 
         ident ':'
-    |   .ident
+    |   '.' ident ':'
 
 equate := 
         ident '=' expr
-    |   .ident '=' expr
+    |   '.' ident '=' expr
 
 function :=
         ident '(' param-list ')' ':'

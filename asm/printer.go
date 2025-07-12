@@ -81,9 +81,9 @@ func (p *Printer) Print(stmt Statement) {
 			p.tab(OpColumn)
 			p.print("ds ")
 			p.expr(t.size)
-		case *ImportStatement:
+		case *IncludeStatement:
 			p.tab(OpColumn)
-			p.printf("import \"%s\"", t.path)
+			p.printf("include \"%s\"", t.path)
 		case *OrgStatement:
 			p.tab(OpColumn)
 			p.print("org ")
@@ -106,6 +106,8 @@ func (p *Printer) Print(stmt Statement) {
 				count++
 			}
 			p.printf("):")
+		case *TestStatement:
+			p.printf("%s():", t.name)
 		case *VarStatement:
 			p.tab(OpColumn)
 			p.printf("var %s %s", toLocal(t.name), wordOrByte(t.size))
