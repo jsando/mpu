@@ -556,14 +556,25 @@ my-label:
 
 Local labels are prefixed with '.' and are scoped to the previous symbol.  This means they are only visible until the next global symbol is defined, and it means the same local label can be reused.
 
-```
-foo:
-.loop:
-.exit:
+See how both of these subroutines reuse "loop" as a label.  Also note when you reference a local label you don't use the dot, meaning you declare it as ".loop:" but refer to it still just as "loop".
 
-bar:
+```
+counter:    dw 0
+
+count_down_from_ten:
+        cpy counter, #10
 .loop:
-.exit:
+        dec counter
+        jne loop
+        ret
+
+count_to_ten:
+        cpy counter, #0
+.loop:
+        inc counter
+        cmp counter, #10
+        jlt loop
+        ret
 ```
 
 ## Functions & Variables
