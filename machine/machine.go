@@ -41,18 +41,18 @@ type AssertionFailure struct {
 // Machine implements MPU ... memory processing unit.
 // It supports 27 instructions and 6 addressing modes.
 type Machine struct {
-	memory         Memory // 64kb of memory + dma overlay
-	pc             uint16 // program counter ... shadowed on read/write to address $0
-	sp             uint16 // stack pointer ... shadowed on read/write to address $2
-	fp             uint16 // frame pointer ... shadowed on read/write to address $4
-	negative       bool   // Negative flag, set true if last value had the high bit set.
-	zero           bool   // Zero flag, set true if last value had zero value.
-	carry          bool   // Carry flag
-	bytes          bool   // Bytes flag, if true then operations are on bytes instead of words
-	step           bool   // Single step mode, if true breaks after executing 1 instruction
-	assertion      bool   // Assertion flag, set by SEA instruction, affects next CMP
-	testMode       bool   // Test mode, enables assertion checking
-	assertionFails int    // Count of assertion failures
+	memory         Memory            // 64kb of memory + dma overlay
+	pc             uint16            // program counter ... shadowed on read/write to address $0
+	sp             uint16            // stack pointer ... shadowed on read/write to address $2
+	fp             uint16            // frame pointer ... shadowed on read/write to address $4
+	negative       bool              // Negative flag, set true if last value had the high bit set.
+	zero           bool              // Zero flag, set true if last value had zero value.
+	carry          bool              // Carry flag
+	bytes          bool              // Bytes flag, if true then operations are on bytes instead of words
+	step           bool              // Single step mode, if true breaks after executing 1 instruction
+	assertion      bool              // Assertion flag, set by SEA instruction, affects next CMP
+	testMode       bool              // Test mode, enables assertion checking
+	assertionFails int               // Count of assertion failures
 	lastFailure    *AssertionFailure // Details of the last assertion failure
 }
 
@@ -104,7 +104,7 @@ func (m *Machine) Run() {
 		value1 := 0       // value of first operand, if any
 		value2 := 0       // value of second operand, if any
 		opCode, m1, m2 := DecodeOp(in)
-		
+
 		// Check for halt after decoding
 		if opCode == Hlt {
 			return

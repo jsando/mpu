@@ -64,12 +64,12 @@ func (f *TerminalFormatter) Format(results []TestResult, w io.Writer) error {
 			if result.Message != "" && (f.Verbose || strings.Contains(result.Message, "runtime error")) {
 				fmt.Fprintf(w, "  %s\n", result.Message)
 			}
-			
+
 			// Show failure details with source
 			for _, detail := range result.FailureDetails {
 				if detail.File != "" && detail.Line > 0 {
 					fmt.Fprintf(w, "\n  at %s:%d\n", detail.File, detail.Line)
-					
+
 					// Get source lines with context
 					lines, startLine, err := f.sourceReader.GetContext(detail.File, detail.Line, 1, 1)
 					if err == nil {
@@ -87,7 +87,7 @@ func (f *TerminalFormatter) Format(results []TestResult, w io.Writer) error {
 							}
 						}
 					}
-					
+
 					// Only show expected/actual for assertion failures
 					if !strings.Contains(result.Message, "runtime error") {
 						fmt.Fprintf(w, "\n  Expected: %d\n", detail.Expected)

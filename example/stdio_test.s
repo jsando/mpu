@@ -1,5 +1,5 @@
-        import "stdio"
-        import "strconv"
+        include "stdio.s"
+        include "strconv.s"
 
 // requires: strconv, stdio
 //---------------------------------------------------------
@@ -16,7 +16,7 @@ main():
         var i word
 
         cpy i, #1
-.loop
+.loop:
         psh i
         jsr PrintInteger
         pop #2

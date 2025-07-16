@@ -15,7 +15,7 @@ Itoa(value word, buffer word, bsize word):
         add buffer, bsize // start at right side of buffer
         dec buffer
         cpy *buffer, #0
-.loop
+.loop:
         cmp value, #10
         jlt last
         dec buffer
@@ -33,7 +33,7 @@ Itoa(value word, buffer word, bsize word):
         clb
         cpy value, next
         jmp loop
-.last
+.last:
         dec buffer
         clc
         cpy t2, #'0'

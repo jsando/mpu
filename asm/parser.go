@@ -26,23 +26,23 @@ import (
 )
 
 type Parser struct {
-	messages      *Messages
-	lexer         *Input
-	pc            int
-	first         Statement
-	last          Statement
-	eolCount      int                // to remember intentional blank lines for reformat
-	comments      []string           // pending block comments for next statement
-	processImport bool               // If just formatting don't automatically append imports
-	function      *FunctionStatement // Current function to append vars to or nil
-	global        string             // Most recent global (function or label), to define locals against
+	messages       *Messages
+	lexer          *Input
+	pc             int
+	first          Statement
+	last           Statement
+	eolCount       int                // to remember intentional blank lines for reformat
+	comments       []string           // pending block comments for next statement
+	processInclude bool               // If just formatting don't automatically append includes
+	function       *FunctionStatement // Current function to append vars to or nil
+	global         string             // Most recent global (function or label), to define locals against
 }
 
 func NewParser(lex *Input) *Parser {
 	return &Parser{
-		messages:      &Messages{},
-		lexer:         lex,
-		processImport: true,
+		messages:       &Messages{},
+		lexer:          lex,
+		processInclude: true,
 	}
 }
 
@@ -50,8 +50,8 @@ func NewParserFromReader(name string, r io.Reader) *Parser {
 	return NewParser(NewInput([]TokenReader{NewLexer(name, r)}))
 }
 
-func (p *Parser) SetProcessImport(process bool) {
-	p.processImport = process
+func (p *Parser) SetProcessInclude(process bool) {
+	p.processInclude = process
 }
 
 // Files returns the list of all files processed.
@@ -200,8 +200,8 @@ loop:
 			switch tok {
 			case TokIdent:
 				p.parseGlobalSymbol() // global label, equate, or function
-			case TokImport:
-				p.parseImports()
+			case TokInclude:
+				p.parseIncludes()
 			case TokTest:
 				p.parseTestDecl()
 			case TokDb:
@@ -227,12 +227,12 @@ loop:
 	}
 }
 
-func (p *Parser) parseImports() {
-	stmt := &ImportStatement{}
+func (p *Parser) parseIncludes() {
+	stmt := &IncludeStatement{}
 	p.addStatement(stmt)
 	tok := p.lexer.Next()
 	if tok != TokString {
-		p.errorf("imports requires string as argument")
+		p.errorf("includes requires string as argument")
 		return
 	}
 	name, err := strconv.Unquote(p.lexer.TokenText())
@@ -244,9 +244,9 @@ func (p *Parser) parseImports() {
 
 	// When running fmt we don't want to append all included files to the one original file :)
 	// Just need the AST to reformat the code.
-	if p.processImport {
+	if p.processInclude {
 		dir := filepath.Dir(p.lexer.FileName())
-		name = filepath.Join(dir, name) + ".s"
+		name = filepath.Join(dir, name)
 		file, err := os.Open(name)
 		if err != nil {
 			p.errorf("error opening file '%s': %s\n", name, err.Error())
@@ -346,37 +346,37 @@ func (p *Parser) parseTestDecl() {
 		p.skipToEOL()
 		return
 	}
-	
+
 	testName := p.lexer.TokenText()
-	
+
 	if p.lexer.Next() != TokLeftParen {
 		p.errorf("expected '(' after test function name")
 		p.skipToEOL()
 		return
 	}
-	
+
 	if p.lexer.Next() != TokRightParen {
 		p.errorf("expected ')' - test functions take no parameters")
 		p.skipToEOL()
 		return
 	}
-	
+
 	if p.lexer.Next() != TokColon {
 		p.errorf("expected ':' after test function declaration")
 		p.skipToEOL()
 		return
 	}
-	
+
 	// Create test statement
 	test := &TestStatement{
 		name: testName,
 	}
 	p.addStatement(test)
-	
+
 	// Set this as the current global context
 	p.global = testName
 	p.function = nil
-	
+
 	p.lexer.Next()
 }
 
@@ -391,6 +391,8 @@ func (p *Parser) parseLocalSymbol() {
 		p.skipToEOL()
 		return
 	}
+	text := p.lexer.TokenText()
+	line := p.lexer.Line()
 	id := p.global + "." + p.lexer.TokenText()
 	p.lexer.Next()
 
@@ -401,11 +403,17 @@ func (p *Parser) parseLocalSymbol() {
 		p.addStatement(stmt)
 		p.lexer.Next()
 		stmt.value = p.parseExpr()
-	} else {
+	} else if p.lexer.Token() == TokColon {
 		stmt := &LabelStatement{
 			name: id,
 		}
 		p.addStatement(stmt)
+		p.lexer.Next()
+	} else {
+		// Report error at the saved line number
+		p.errorAtf(line, "expected '=' or ':' after identifier '%s'", text)
+		// Skip to end of line for error recovery
+		p.skipToEOL()
 	}
 }
 
@@ -617,10 +625,11 @@ func (p *Parser) parseUnaryExpr() Expr {
 	}
 }
 
-//PrimaryExpr :=
-//      '(' origin ')'
-//    | Identifier
-//    | Literal (int, String, Char)
+// PrimaryExpr :=
+//
+//	  '(' origin ')'
+//	| Identifier
+//	| Literal (int, String, Char)
 func (p *Parser) parsePrimaryExpr() Expr {
 	var expr Expr
 	switch p.lexer.Token() {

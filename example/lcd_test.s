@@ -1,6 +1,6 @@
 // Test driver for lcd
 
-            import "lcd"
+            include "lcd.s"
 
             dw main
 
@@ -29,12 +29,12 @@ quit:               dw 0
 main():
             // Open the main window
             jsr InitScreen
-.loop
+.loop:
             jsr PollEvents
             jsr DrawScreen
             cmp quit, #0
             jeq loop
-.exit        
+.exit:
             // Main doesn't return, it just halts.
             hlt
 
@@ -45,47 +45,47 @@ InitScreen():
             cpy REG_IO_REQ, #init
             ret
 
-.init       dw 0x0201              // graphics, initialize
+.init:       dw 0x0201              // graphics, initialize
             dw SCREEN_WIDTH
             dw SCREEN_HEIGHT
             dw title
-.title      db "MPU LCD", 0
+.title:      db "MPU LCD", 0
 
 //
 // Poll and handle all pending graphics events, return 1 if time to exit.
 //
 PollEvents():
-.loop
+.loop:
             cpy REG_IO_REQ, #poll
             cmp poll_event, #SDL_QUIT
             jne isKeyDown
             cpy quit, #1
             jmp exit
-.isKeyDown
+.isKeyDown:
             cmp poll_event, #SDL_KEYDOWN
             jne isKeyUp
             psh keycode
             jsr onKeyDown
             pop #2
             jmp loop
-.isKeyUp
+.isKeyUp:
             cmp poll_event, #SDL_KEYUP
             jne isNoMore
             psh keycode
             jsr onKeyUp
             pop #2
             jmp loop
-.isNoMore
+.isNoMore:
             cmp poll_event, #0
             jne loop
-.exit            
+.exit:
             ret
 
-.poll       dw 0x0202           // graphics, poll        
-.poll_event dw 0                // space for response event type id
-.poll_time  dw 0                // space for response event timestamp (1/4 second since init)
-.keycode
-.poll_data  ds 8                // space for response, structure depends on event type
+.poll:       dw 0x0202           // graphics, poll
+.poll_event: dw 0                // space for response event type id
+.poll_time:  dw 0                // space for response event timestamp (1/4 second since init)
+.keycode:
+.poll_data:  ds 8                // space for response, structure depends on event type
 
 //
 // Handle keydown events.
@@ -94,7 +94,7 @@ onKeyDown(keycode word):
             cmp keycode, #SDLK_ESCAPE
             jne done
             cpy quit, #1
-.done            
+.done:
             ret
 
 //
@@ -122,27 +122,27 @@ DrawScreen():
             ret
 
             // device request to set color
-.color      dw 0x0205
-.color_r    db 0
-.color_g    db 0
-.color_b    db 0
-.color_a    db 255
+.color:      dw 0x0205
+.color_r:    db 0
+.color_g:    db 0
+.color_b:    db 0
+.color_a:    db 255
 
             // device request to clear screen
-.clear      dw 0x0204              
+.clear:      dw 0x0204
 
             // device request to present backbuffer to screen
-.present    dw 0x0203              
+.present:    dw 0x0203
             dw 10               // delay ms
-.white      dw 0x0205
+.white:      dw 0x0205
             db 255,0,0,255
-.line       dw 0x0206
+.line:       dw 0x0206
             dw SCREEN_WIDTH / 2
             dw 0
             dw SCREEN_WIDTH / 2
             dw SCREEN_HEIGHT
 
-.sample  db " !\"#$%&'()*+,-./",10
+.sample:  db " !\"#$%&'()*+,-./",10
          db "0123456789:;<=>?@",10
          db "ABCDEFGHIJKLMNOPQRSTUVWXYZ",10
          db "[\\]^_`",10

@@ -44,11 +44,11 @@ test TestAdd():
 `
 	statements := parseSource(t, source)
 	suite, err := DiscoverTests(statements)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, suite)
 	assert.Len(t, suite.Tests, 1)
-	
+
 	test := suite.Tests[0]
 	assert.Equal(t, "TestAdd", test.Name)
 	assert.Equal(t, "TestAdd", test.Function)
@@ -69,11 +69,11 @@ test TestThree():
 `
 	statements := parseSource(t, source)
 	suite, err := DiscoverTests(statements)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, suite)
 	assert.Len(t, suite.Tests, 3)
-	
+
 	assert.Equal(t, "TestOne", suite.Tests[0].Name)
 	assert.Equal(t, "TestTwo", suite.Tests[1].Name)
 	assert.Equal(t, "TestThree", suite.Tests[2].Name)
@@ -91,7 +91,7 @@ main:
 `
 	statements := parseSource(t, source)
 	suite, err := DiscoverTests(statements)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, suite)
 	assert.Empty(t, suite.Tests)
@@ -118,11 +118,11 @@ test TestAnother():
 `
 	statements := parseSource(t, source)
 	suite, err := DiscoverTests(statements)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, suite)
 	assert.Len(t, suite.Tests, 2)
-	
+
 	assert.Equal(t, "TestHelper", suite.Tests[0].Name)
 	assert.Equal(t, "TestAnother", suite.Tests[1].Name)
 }
@@ -142,7 +142,7 @@ test_teardown:
 `
 	statements := parseSource(t, source)
 	suite, err := DiscoverTests(statements)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, suite)
 	assert.Len(t, suite.Tests, 1)

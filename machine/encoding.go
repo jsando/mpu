@@ -135,6 +135,7 @@ type Encoding struct {
 	Instruction Encoding Table
 
 The main 9 instructions (add, sub, mul, div, and, or, xor, cpy, cmp) support 20 modes:
+
 	Abs,Abs     Ind,Abs     Rel,Abs     RelInd,Abs
 	Abs,Imm     Ind,Imm     Rel,Imm		RelInd,Imm
 	Abs,Ind     Ind,Ind     Rel,Ind		RelInd,Ind
@@ -146,7 +147,6 @@ The 8 jump instructions only support immediate mode.
 There are 5 instructions with implied mode.
 
 Push supports all 5 modes.  Pop with immediate value pops and discards that number of bytes.
-
 */
 var opTable = []Encoding{
 	0x00: {op: Hlt, m1: Implied, m2: Implied},

@@ -1,7 +1,7 @@
 // Testing 12.4 fixed point math, with a print routine to debug.
 
-            import "stdio"
-            import "sqrt"
+            include "stdio.s"
+            include "sqrt.s"
 
             org 0
             dw main
@@ -39,22 +39,22 @@ printfp(value word):
             and t1, #0b_1000
             jeq b2
             add fraction, #5000
-.b2
+.b2:
             cpy t1, value
             and t1, #0b_0100
             jeq b1            
             add fraction, #2500
-.b1
+.b1:
             cpy t1, value
             and t1, #0b_0010
             jeq b0
             add fraction, #1250
-.b0
+.b0:
             cpy t1, value
             and t1, #0b_0001
             jeq printit
             add fraction, #625
-.printit
+.printit:
             cpy fracbuf, #0x3030
             cpy fracbuf+2, #0x3030
             psh fraction
@@ -64,12 +64,12 @@ printfp(value word):
             pop #6
             cpy 6, #ioPrintFrac
             ret
-.ioPrintDec
+.ioPrintDec:
         dw 0x0101   // stdout putchars
         dw dec        // pointer to zero terminated string
-.dec    db '.', 0x00
+.dec:    db '.', 0x00
 
-.ioPrintFrac
+.ioPrintFrac:
         dw 0x0101   // stdout putchars
         dw fracbuf       // pointer to zero terminated string
-.fracbuf ds 5
+.fracbuf: ds 5

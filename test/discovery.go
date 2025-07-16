@@ -50,7 +50,7 @@ func DiscoverTests(statements asm.Statement) (*TestSuite, error) {
 				Line:     s.Line(),
 			}
 			suite.Tests = append(suite.Tests, test)
-			
+
 		case *asm.LabelStatement:
 			// Check for special test setup/teardown functions
 			name := s.Name()

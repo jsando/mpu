@@ -29,7 +29,7 @@ type Printer struct {
 }
 
 const (
-	OpColumn      = 16
+	OpColumn      = 12
 	CommentColumn = 32
 )
 
@@ -81,9 +81,9 @@ func (p *Printer) Print(stmt Statement) {
 			p.tab(OpColumn)
 			p.print("ds ")
 			p.expr(t.size)
-		case *ImportStatement:
+		case *IncludeStatement:
 			p.tab(OpColumn)
-			p.printf("import \"%s\"", t.path)
+			p.printf("include \"%s\"", t.path)
 		case *OrgStatement:
 			p.tab(OpColumn)
 			p.print("org ")
@@ -106,6 +106,8 @@ func (p *Printer) Print(stmt Statement) {
 				count++
 			}
 			p.printf("):")
+		case *TestStatement:
+			p.printf("%s():", t.name)
 		case *VarStatement:
 			p.tab(OpColumn)
 			p.printf("var %s %s", toLocal(t.name), wordOrByte(t.size))
@@ -145,7 +147,7 @@ func (p *Printer) label(label string) {
 	if loc == label {
 		loc += ":"
 	} else {
-		loc = "." + loc
+		loc = "." + loc + ":"
 	}
 	p.print(loc)
 }
@@ -214,11 +216,13 @@ func (p *Printer) tab(column int) {
 }
 
 func (p *Printer) stmt(stmt *InstructionStatement) {
-	p.printf("%s ", stmt.operation)
+	p.printf("%s", stmt.operation)
 	count := 0
 	for _, op := range stmt.operands {
 		if count > 0 {
-			p.printf(",")
+			p.printf(", ")
+		} else {
+			p.print(" ")
 		}
 		switch op.mode {
 		case machine.Implied:

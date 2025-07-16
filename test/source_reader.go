@@ -38,11 +38,11 @@ func (s *SourceReader) GetLine(filename string, lineNum int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	if lineNum < 1 || lineNum > len(lines) {
 		return "", fmt.Errorf("line %d out of range (file has %d lines)", lineNum, len(lines))
 	}
-	
+
 	return lines[lineNum-1], nil
 }
 
@@ -52,21 +52,21 @@ func (s *SourceReader) GetContext(filename string, lineNum int, before, after in
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	if lineNum < 1 || lineNum > len(lines) {
 		return nil, 0, fmt.Errorf("line %d out of range", lineNum)
 	}
-	
+
 	start := lineNum - before - 1
 	if start < 0 {
 		start = 0
 	}
-	
+
 	end := lineNum + after
 	if end > len(lines) {
 		end = len(lines)
 	}
-	
+
 	return lines[start:end], start + 1, nil
 }
 
@@ -75,23 +75,23 @@ func (s *SourceReader) getLines(filename string) ([]string, error) {
 	if lines, ok := s.cache[filename]; ok {
 		return lines, nil
 	}
-	
+
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-	
+
 	var lines []string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	
+
 	s.cache[filename] = lines
 	return lines, nil
 }

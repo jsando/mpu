@@ -556,14 +556,25 @@ my-label:
 
 Local labels are prefixed with '.' and are scoped to the previous symbol.  This means they are only visible until the next global symbol is defined, and it means the same local label can be reused.
 
-```
-foo:
-.loop
-.exit
+See how both of these subroutines reuse "loop" as a label.  Also note when you reference a local label you don't use the dot, meaning you declare it as ".loop:" but refer to it still just as "loop".
 
-bar:
-.loop
-.exit
+```
+counter:    dw 0
+
+count_down_from_ten:
+        cpy counter, #10
+.loop:
+        dec counter
+        jne loop
+        ret
+
+count_to_ten:
+        cpy counter, #0
+.loop:
+        inc counter
+        cmp counter, #10
+        jlt loop
+        ret
 ```
 
 ## Functions & Variables
@@ -658,70 +669,99 @@ For example to declare a global variable 'MyVar' that holds a word, with initial
 MyVar:  dw 5            // Emits bytes 0x05 0x00
 ```
 
-## Import
+## include
 
-Use the 'import' directive to append another assembly source file to the end of the current one, if it hasn't already been included.  It is like 'include' except it always appends the given path after processing the current source file.
+Use the 'include' directive to append another assembly source file to the end of the current one, if it hasn't already been included.  It always appends the given path after processing the current source file.
+
+Paths are resolved relative to the current file.
 
 Example:
 
 ```
-    import "strconv.s"
-    import "random.s"
+    include "strconv.s"
+    include "random.s"
 ```
-
 ## Assembly Grammar
 
 line :=
         label
     |   label instruction
+    |   equate
     |   instruction
     |   function
     |   test
-    |   equate
-    |   vardecl
-    |   import
+    |   variable_declaration
+    |   directive
+    |   include
 
-import :=
-        'import' string
+include :=
+        'include' "path"
 
-label := 
-        ident ':'
-    |   .ident
+label :=
+        identifier ':'
+    |   '.' identifier ':'
 
-equate := 
-        ident '=' expr
-    |   .ident '=' expr
+equate :=
+        identifier '=' expr
+    |   '.' identifier '=' expr
 
 function :=
-        ident '(' param-list ')' ':'
+        identifier '(' param-list ')' ':'
 
 test :=
-        'test' ident '(' ')' ':'
+        'test' identifier '(' ')' ':'
 
-vardecl :=
-        'var' ident ['byte' | 'word']
+variable_declaration :=
+        'var' identifier ['byte' | 'word']
+
+directive :=
+        'org' expr
+        |   'db' expr-list
+        |   'dw' expr-list
+        |   'ds' expr
 
 instruction :=
-        keyword [operand[,operand]*]
+        opcode [operand [,operand]*]
 
-Operand  :=
+operand  :=
       '#' expr
     | '*' expr
     | expr
 
 expr :=
-    MulExpr [ ('+' | '-' | '|' | '^') MulExpr]*
+    mul-expr [ ('+' | '-' | '|' | '^') mul-expr]*
 
-MulExpr :=
-    UnaryExpr ['*' | '/' | '%' | '<<' | '>>'  UnaryExpr]*
+mul-expr :=
+    unary-expr ['*' | '/' | '%' | '<<' | '>>'  unary-expr]*
 
-UnaryExpr :=
-    ['+' | '-'] PrimaryExpr
+unary-expr :=
+    ['+' | '-'] primary-expr
 
-PrimaryExpr :=
+primary-expr :=
       '(' expr ')'
-    | Identifier
-    | Literal (int, String, Char)
+    | identifier
+    | integer
+    | string
+    | char
+
+expr-list :=
+    expr [',' expr]*
+
+comment := '//' {any-char} newline
+
+identifier := letter {letter | digit | '-' | '_'}
+
+integer := decimal-literal | hex-literal | binary-literal | char-literal
+
+decimal-literal := digit {digit | '_'}
+
+hex-literal := '0x' hex-digit {hex-digit | '_'}
+
+binary-literal := '0b' ('0' | '1') {('0' | '1') | '_'}
+
+char-literal := "'" char "'"
+
+string := '"' {string-char} '"'
 
 ## Background
 

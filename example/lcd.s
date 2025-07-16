@@ -43,7 +43,7 @@ ty:         dw 0                // Text next print y coordinate
 DrawString(pstring word):
     var ch word
             cpy ch, #0
-.loop
+.loop:
             seb
             cpy ch, *pstring
             jeq done
@@ -54,7 +54,7 @@ DrawString(pstring word):
             cpy tx, #0
             add ty, #LCD_LINE_SPACE
             jmp next
-.validate
+.validate:
             cmp ch, #32
             jlt next
             cmp ch, #128
@@ -64,10 +64,10 @@ DrawString(pstring word):
             psh ch
             jsr DrawCharacter            
             pop #2
-.next
+.next:
             inc pstring
             jmp loop
-.done
+.done:
             clb
             ret
 
@@ -83,13 +83,13 @@ DrawCharacter(char word):
             add lcd, #CharacterTable
             cpy mask, *lcd
             cpy segptr, #CharacterSegmentTable
-.loop
+.loop:
             cpy test, #1
             and test, mask
             jne draw
             add segptr, #8
             jmp next
-.draw
+.draw:
             cpy line_x, tx
             add line_x, *segptr
             add segptr, #2
@@ -106,18 +106,18 @@ DrawCharacter(char word):
             add line_y2, *segptr
             add segptr, #2
             cpy LIBLCD_IO_REQ, #line
-.next
+.next:
             div mask, #2        // shift right
             jne loop            // if result is zero there's nothing more to draw
 
             add tx, #LCD_CHAR_SPACE
             ret
 
-.line       dw 0x0206
-.line_x     dw 0
-.line_y     dw 0
-.line_x2    dw 0
-.line_y2    dw 0
+.line:       dw 0x0206
+.line_x:     dw 0
+.line_y:     dw 0
+.line_x2:    dw 0
+.line_y2:    dw 0
 
 CharacterSegmentTable:
     .cw          = LCD_CHAR_WIDTH

@@ -12,7 +12,7 @@ main():
     // Initialize main window
     cpy IO_REQUEST, #io_window_req
 
-.loop
+.loop:
     // poll for events until no more
     cpy IO_REQUEST, #io_poll_req
     cmp io_poll_event, #0
@@ -23,7 +23,7 @@ main():
 
     // Draw random colored rectangles
     cpy i, #20
-.draw_rects
+.draw_rects:
     jsr RandomFilledRect
     dec i
     jne draw_rects
@@ -31,30 +31,30 @@ main():
     cpy IO_REQUEST, #io_present_req
     jmp loop
 
-.io_window_req
+.io_window_req:
     dw 0x0201
     dw 640  // width
     dw 480  // height
     dw window_title
-.window_title
+.window_title:
     db "Hello World, from MPU!", 0
 
-.io_poll_req
+.io_poll_req:
     dw 0x0202
-.io_poll_event
+.io_poll_event:
     dw 2
-.io_poll_time
+.io_poll_time:
     dw 2
     ds 8 // space for event data
 
-.io_present_req
+.io_present_req:
     dw 0x0203
     dw 16 // delay ms
 
-.io_sdl_clear
+.io_sdl_clear:
     dw 0x0204
 
-.io_sdl_setcolor
+.io_sdl_setcolor:
     dw 0x0205
     db 0,0,0,255
 
@@ -126,14 +126,14 @@ RandomFilledRect():
     cpy IO_REQUEST, #rect
     ret
 
-.color      dw 0x0205
-.color_r    db 0
-.color_g    db 0
-.color_b    db 0
-.color_a    db 255
+.color:      dw 0x0205
+.color_r:    db 0
+.color_g:    db 0
+.color_b:    db 0
+.color_a:    db 255
 
-.rect       dw 0x0208
-.rect_x     dw 0
-.rect_y     dw 0
-.rect_w     dw 0
-.rect_h     dw 0
+.rect:       dw 0x0208
+.rect_x:     dw 0
+.rect_y:     dw 0
+.rect_w:     dw 0
+.rect_h:     dw 0

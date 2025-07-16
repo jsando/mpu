@@ -26,8 +26,8 @@ const (
 type Message struct {
 	messageType int
 	file        string
-	line        int    // 1-based line number
-	column      int    // 1-based column number
+	line        int // 1-based line number
+	column      int // 1-based column number
 	message     string
 }
 

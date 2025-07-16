@@ -22,9 +22,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-            import "random"
-            import "lcd"
-            import "strconv"
+            include "random.s"
+            include "lcd.s"
+            include "strconv.s"
 
                 // The initial program counter needs to point to the entry point at startup.
                 // The rest of the special mem area ($00-$0f) can be left zero on startup.
@@ -97,12 +97,12 @@ press_space_msg:    db "1=1 PLAYER, 2=2 PLAYERS",0
 main():
             // Open the main window
             jsr InitScreen
-.loop
+.loop:
             jsr PollEvents
             jsr DrawScreen
             cmp quit, #0
             jeq loop
-.exit        
+.exit:
             // Main doesn't return, it just halts.
             hlt
 
@@ -113,47 +113,47 @@ InitScreen():
             cpy REG_IO_REQ, #init
             ret
 
-.init       dw 0x0201
+.init:       dw 0x0201
             dw SCREEN_WIDTH
             dw SCREEN_HEIGHT
             dw title
-.title      db "MPU PONG", 0
+.title:     db "MPU PONG", 0
 
 //
 // Poll and handle all pending graphics events, return 1 if time to exit.
 //
 PollEvents():
-.loop
+.loop:
             cpy REG_IO_REQ, #poll
             cmp poll_event, #SDL_QUIT
             jne isKeyDown
             cpy quit, #1
             jmp exit
-.isKeyDown
+.isKeyDown:
             cmp poll_event, #SDL_KEYDOWN
             jne isKeyUp
             psh keycode
             jsr onKeyDown
             pop #2
             jmp loop
-.isKeyUp
+.isKeyUp:
             cmp poll_event, #SDL_KEYUP
             jne isNoMore
             psh keycode
             jsr onKeyUp
             pop #2
             jmp loop
-.isNoMore
+.isNoMore:
             cmp poll_event, #0
             jne loop
-.exit            
+.exit:
             ret
 
-.poll       dw 0x0202           // graphics, poll        
-.poll_event dw 0                // space for response event type id
-.poll_time  dw 0                // space for response event timestamp (1/4 second since init)
-.keycode
-.poll_data  ds 8                // space for response, structure depends on event type
+.poll:       dw 0x0202           // graphics, poll
+.poll_event: dw 0                // space for response event type id
+.poll_time:  dw 0                // space for response event timestamp (1/4 second since init)
+.keycode:
+.poll_data:  ds 8                // space for response, structure depends on event type
 
 //
 // Handle keydown events.
@@ -163,38 +163,38 @@ onKeyDown(keycode word):
             jne checkZ
             cpy player1_paddle_up, #1
             jmp done
-.checkZ
+.checkZ:
             cmp keycode, #SDLK_z
             jne checkEsc
             cpy player1_paddle_dn, #1
             jmp done            
-.checkEsc  
+.checkEsc:
             cmp keycode, #SDLK_ESCAPE
             jne checkl
             cpy quit, #1
             jmp done
-.checkl
+.checkl:
             cmp keycode, #SDLK_l
             jne checkComma
             cpy player2_paddle_up, #1
             jmp done
-.checkComma
+.checkComma:
             cmp keycode, #SDLK_COMMA
             jne check1
             cpy player2_paddle_dn, #1
             jmp done
-.check1
+.check1:
             cmp keycode, #SDLK_1
             jne check2
             cpy players, #1
             jsr NewGame
             jmp done
-.check2
+.check2:
             cmp keycode, #SDLK_2
             jne done
             cpy players, #2
             jsr NewGame
-.done            
+.done:
             ret
 
 //
@@ -205,19 +205,19 @@ onKeyUp(keycode word):
             jne checkZ
             cpy player1_paddle_up, #0
             jmp done
-.checkZ
+.checkZ:
             cmp keycode, #SDLK_z
             jne checkl
             cpy player1_paddle_dn, #0
-.checkl
+.checkl:
             cmp keycode, #SDLK_l
             jne checkComma
             cpy player2_paddle_up, #0
-.checkComma
+.checkComma:
             cmp keycode, #SDLK_COMMA
             jne done
             cpy player2_paddle_dn, #0
-.done            
+.done:
             ret
 
 //
@@ -232,7 +232,7 @@ NewGame():
             cpy player1_score, #0
             cpy player2_score, #0
             jsr InitBall
-.done
+.done:
             ret
 
 //
@@ -258,7 +258,7 @@ DrawScreen():
             jsr Player2AI
             jmp done
 
-.not_playing
+.not_playing:
             // Show GAME OVER
             cpy tx, #215
             cpy ty, #80
@@ -272,26 +272,26 @@ DrawScreen():
             pop #2
 
             // Present what we've drawn and pause 16ms
-.done            
+.done:
             cpy REG_IO_REQ, #present
             ret
 
             // device request to set color
-.color      dw 0x0205
-.color_r    db 0
-.color_g    db 0
-.color_b    db 0
-.color_a    db 255
+.color:      dw 0x0205
+.color_r:    db 0
+.color_g:    db 0
+.color_b:    db 0
+.color_a:    db 255
 
             // device request to clear screen
-.clear      dw 0x0204
+.clear:      dw 0x0204
 
             // device request to present backbuffer to screen
-.present    dw 0x0203
+.present:    dw 0x0203
             dw 10               // delay ms
-.white      dw 0x0205
+.white:      dw 0x0205
             db 255,255,255,255
-.line       dw 0x0206
+.line:       dw 0x0206
             dw SCREEN_WIDTH / 2
             dw 0
             dw SCREEN_WIDTH / 2
@@ -319,7 +319,7 @@ DrawPlayer1Paddle():
             jge move_done
             cpy player1_paddle_y, #0
             jmp move_done
-.check_down
+.check_down:
             cmp player1_paddle_dn, #0            
             jeq move_done
             clc
@@ -327,19 +327,19 @@ DrawPlayer1Paddle():
             cmp player1_paddle_y, #SCREEN_HEIGHT - PADDLE_HEIGHT
             jlt move_done
             cpy player1_paddle_y, #SCREEN_HEIGHT - PADDLE_HEIGHT
-.move_done                        
+.move_done:
             ret
 
             // device request to set color
-.color      dw 0x0205
+.color:      dw 0x0205
             db 255,255,255,255
 
             // device request to fill rectangle
-.rect       dw 0x0208
-.rect_x     dw 0
-.rect_y     dw 0
-.rect_w     dw 0
-.rect_h     dw 0
+.rect:       dw 0x0208
+.rect_x:     dw 0
+.rect_y:     dw 0
+.rect_w:     dw 0
+.rect_h:     dw 0
 
 //
 // Draw player 2 paddle.
@@ -363,7 +363,7 @@ DrawPlayer2Paddle():
             jge move_done
             cpy player2_paddle_y, #0
             jmp move_done
-.check_down
+.check_down:
             cmp player2_paddle_dn, #0            
             jeq move_done
             clc
@@ -371,19 +371,19 @@ DrawPlayer2Paddle():
             cmp player2_paddle_y, #SCREEN_HEIGHT - PADDLE_HEIGHT
             jlt move_done
             cpy player2_paddle_y, #SCREEN_HEIGHT - PADDLE_HEIGHT
-.move_done                        
+.move_done:
             ret
 
             // device request to set color
-.color      dw 0x0205
+.color:      dw 0x0205
             db 255,255,255,255
 
             // device request to fill rectangle
-.rect       dw 0x0208
-.rect_x     dw 0
-.rect_y     dw 0
-.rect_w     dw 0
-.rect_h     dw 0
+.rect:       dw 0x0208
+.rect_x:     dw 0
+.rect_y:     dw 0
+.rect_w:     dw 0
+.rect_h:     dw 0
 
 //
 // InitBall
@@ -412,7 +412,7 @@ InitBall():
             and isLeft, #1
             jeq setYSpeed
             mul ball_xspeed, #-1
-.setYSpeed
+.setYSpeed:
             // Set yspeed between -3...3
             psh #0
             psh #7
@@ -443,9 +443,9 @@ DrawBall():
             jlt y_bounce
             cmp ball_y, #(SCREEN_HEIGHT - BALL_RADIUS)
             jlt y_no_bounce
-.y_bounce
+.y_bounce:
             mul ball_yspeed, #-1
-.y_no_bounce
+.y_no_bounce:
             // If ball off screen, re-initialize
             cmp ball_x, #-BALL_RADIUS
             jlt player2_scored
@@ -459,13 +459,13 @@ DrawBall():
             jne exitGameOver
             jsr InitBall
             jmp no_reset
-.player2_scored
+.player2_scored:
             inc player2_score
             jsr IsGameOver
             cmp game_over, #0
             jne exitGameOver
             jsr InitBall                                    
-.no_reset            
+.no_reset:
             // Move ball
             clc
             add ball_x, ball_xspeed
@@ -473,19 +473,19 @@ DrawBall():
             add ball_y, ball_yspeed
 
             jsr BounceBall      // Bounce ball off player paddles
-.exitGameOver
+.exitGameOver:
             ret
 
             // device request to set color
-.color      dw 0x0205
+.color:      dw 0x0205
             db 255,255,255,255
 
             // device request to fill rectangle
-.rect       dw 0x0208
-.rect_x     dw 100
-.rect_y     dw 100
-.rect_w     dw 50
-.rect_h     dw 50
+.rect:       dw 0x0208
+.rect_x:     dw 100
+.rect_y:     dw 100
+.rect_w:     dw 50
+.rect_h:     dw 50
 
 //
 // Game over when one player hits at least 11 and is +2 over the other player.
@@ -502,16 +502,16 @@ IsGameOver():
             cmp t1, #2
             jlt done
             jmp over
-.player2Higher
+.player2Higher:
             cmp player2_score, #11
             jlt done
             cpy t1, player2_score
             sub t1, player1_score
             cmp t1, #2
             jlt done
-.over            
+.over:
             cpy game_over, #1
-.done
+.done:
             ret
 
 BounceBall():
@@ -537,7 +537,7 @@ BounceBall():
             mul ball_xspeed, #-1
             jmp done
 
-.check_player2
+.check_player2:
             // Ball collidding with paddle2?  Only check if the ball is going in that direction.
             cmp ball_xspeed, #0
             jlt done
@@ -556,7 +556,7 @@ BounceBall():
             pop overlap
             jeq done
             mul ball_xspeed, #-1
-.done
+.done:
             ret
 
 //
@@ -570,15 +570,15 @@ Player2AI():
             cmp ball_y, middle
             jlt move_up
             jeq no_move
-.move_dn
+.move_dn:
             cpy player2_paddle_dn, #1
             cpy player2_paddle_up, #0
             ret
-.move_up
+.move_up:
             cpy player2_paddle_dn, #0
             cpy player2_paddle_up, #1
             ret
-.no_move       
+.no_move:
             cpy player2_paddle_dn, #0
             cpy player2_paddle_up, #0
             ret
@@ -615,7 +615,7 @@ Overlap(overlap word, x1 word, y1 word, w1 word, h1 word, x2 word, y2 word, w2 w
             cmp right1, x2      // r1 tot left of r2?
             jlt done
             cpy overlap, #1     // If its not all of the above, its overlapping
-.done
+.done:
             ret
 
 //
@@ -650,4 +650,4 @@ PrintInteger(value word):
         pop #2
         ret
 
-.buffer ds 12       // max 10 digits + null ... plus 2 extra cuz I got a bug somewhere's
+.buffer: ds 12       // max 10 digits + null ... plus 2 extra cuz I got a bug somewhere's
