@@ -289,7 +289,7 @@ One of the ways the 6502 reduced the number of bytes of a program was by leverag
 | **8** | add *r,a  | sub *r,a  | mul *r,a  | div *r,a  | and *r,a  | or *r,a  | xor *r,a  | cpy *r,a  | add *r,# | sub *r,#  | mul *r,#  | div *r,#  | and *r,# | or *r,#  | xor *r,#  | cpy *r,#  |
 | **9** | add  *r,* | sub *r,*  | mul *r,*  | div *r,*  | and *r,*  | or *r,*  | xor *r,*  | cpy *r,*  | add *r,r | sub *r,r  | mul *r,r  | div *r,r  | and *r,r | or *r,r  | xor *r,r  | cpy *r,r  |
 | **A** | add *r,*r | sub *r,*r | mul *r,*r | div *r,*r | and *r,*r | or *r,*r | xor *r,*r | cpy *r,*r |          |           |           |           |          |          |           |           |
-| **B** |   psh a   |   pop a   |   inc a   |   dec a   |    sec    |   clc    |    seb    |    clb    |   ret    |    rst    |  sav #b   |           |          |          |           |           |
+| **B** |   psh a   |   pop a   |   inc a   |   dec a   |    sec    |   clc    |    seb    |    clb    |   ret    |    rst    |  sav #b   |    sea    |  req #   |  req a   |   req r   |           |
 | **C** |   psh *   |   pop *   |   inc *   |   dec *   |  cmp a,#  | cmp a,a  |  cmp a,*  |  cmp a,r  | cmp a,*r |  cmp *,#  |  cmp *,a  |  cmp *,*  | cmp *,r  | cmp *,*r |  cmp r,#  |  cmp r,a  |
 | **D** |   psh r   |   pop r   |   inc r   |   dec r   |  cmp r,*  | cmp r,r  | cmp r,*r  | cmp *r,#  | cmp *r,a | cmp *r,*  | cmp *r,r  | cmp *r,*r |          |          |           |           |
 | **E** |  psh *r   |  pop *r   |  inc *r   |  dec *r   |   jmp #   |  jeq ob  |  jne ob   |  jge ob   |  jlt ob  |  jcc ob   |  jcs ob   |   jsr #   |          |          |           |           |

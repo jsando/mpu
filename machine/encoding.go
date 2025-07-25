@@ -82,6 +82,7 @@ const (
 	Ret
 	Rst
 	Sea
+	Req // Peripheral Management Interface
 )
 
 var mnemonics = []string{
@@ -91,6 +92,7 @@ var mnemonics = []string{
 	"jmp", "jeq", "jne", "jge", "jlt",
 	"jcc", "jcs", "sav", "seb", "clb",
 	"clc", "sec", "ret", "rst", "sea",
+	"req",
 }
 
 func (o OpCode) String() string {
@@ -335,6 +337,9 @@ var opTable = []Encoding{
 	{op: Rst},
 	{op: Sav, m1: ImmediateByte},
 	{op: Sea},
+	{op: Req, m1: Immediate},
+	{op: Req, m1: Absolute},
+	{op: Req, m1: Relative},
 
 	0xC0: {op: Psh, m1: Indirect},
 	{op: Pop, m1: Indirect},

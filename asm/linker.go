@@ -94,7 +94,7 @@ func (l *Linker) Link() {
 				l.doEmitAbsJump(t)
 			case TokJeq, TokJne, TokJge, TokJlt, TokJcc, TokJcs:
 				l.doEmitRelJump(t)
-			case TokInc, TokDec, TokPsh, TokPop, TokSav:
+			case TokInc, TokDec, TokPsh, TokPop, TokSav, TokReq:
 				l.doEmit1Operand(t)
 			default:
 				panic("illegal opcode")
@@ -583,6 +583,8 @@ func tokToOp(tok TokenType) machine.OpCode {
 		op = machine.Sav
 	case TokSea:
 		op = machine.Sea
+	case TokReq:
+		op = machine.Req
 	default:
 		panic("unknown opcode")
 	}
