@@ -27,6 +27,11 @@ type IOHandler interface {
 	Handle(m Memory, addr uint16) (errCode uint16)
 }
 
+type IOHeader struct {
+	Id      uint16 // 0x0101
+	ErrCode uint16
+}
+
 const (
 	ErrNoErr uint16 = iota
 	ErrInvalidHandler
@@ -43,7 +48,8 @@ type IODispatcher struct {
 
 func NewDefaultDispatcher() *IODispatcher {
 	d := NewDispatcher()
-	d.RegisterIOHandler(StdoutDeviceId|StdoutCommandWrite, &StdoutWriteHandler{})
+	d.RegisterIOHandler(StdioDeviceId|StdoutWrite, &StdoutWriteHandler{})
+	d.RegisterIOHandler(StdioDeviceId|GetRandom, &GetRandomHandler{})
 	RegisterSDLHandlers(d)
 	return d
 }
@@ -64,7 +70,7 @@ func (d *IODispatcher) execIORequest(addr uint16) {
 	handler := d.ioHandlers[id]
 	if handler == nil {
 		d.memory.PutWord(addr+2, ErrInvalidHandler)
-		_, _ = fmt.Fprintf(os.Stderr, "io request to unknown handler (0x%04x)\n", id)
+		_, _ = fmt.Fprintf(os.Stderr, "io request at 0x%04x to unknown handler (0x%04x)\n", addr, id)
 		return
 	}
 	err := binary.Read(d.memory.BytesReaderAt(addr), binary.LittleEndian, handler)

@@ -6,12 +6,6 @@
 //  Print the numbers from 1 to 100 to the console.
 //---------------------------------------------------------
 
-        dw main
-
-IOREQ   = 6
-IORES   = 8
-
-        org 0x10
 main():
         var i word
 

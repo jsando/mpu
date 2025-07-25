@@ -9,23 +9,25 @@ PrintInteger(value word):
         psh #BUFSIZE-1
         jsr Itoa
         pop #2
-        pop ioPrintReq+2
+        pop ioPrintReq+4
         pop #2
-        cpy 6, #ioPrintReq
+        req #ioPrintReq
         ret
 .ioPrintReq:
         dw 0x0101   // stdout putchars
+        dw 0
         dw 0        // pointer to zero terminated string
 .BUFSIZE    =   7
 .buffer: ds BUFSIZE
 
 Println():
-        cpy 6, #ioPrintReq
+        req #ioPrintReq
         ret
 .ioPrintReq:
         dw 0x0101   // stdout putchars
+        dw 0
         dw lf        // pointer to zero terminated string
-.lf:     db 0x0a, 0x00
+.lf:    db 0x0a, 0x00
 
 //
 // Print the given value as a 4-digit hexadecimal number.
@@ -54,10 +56,11 @@ PrintHex(hi byte, lo byte):
                 pop buffer+5
                 cpy buffer+6, #0
                 clb
-                cpy 6, #ioPrintReq
+                req #ioPrintReq
                 ret
 .ioPrintReq:
                 dw 0x0101       // stdout putchars
+                dw 0
                 dw buffer       // pointer to zero terminated string
 .buffer:         db "0x0000", 0
 
@@ -68,5 +71,5 @@ ToHex(value word):
                 sub value, #0x0a
                 add value, #'a'
                 ret
-.number:         add value, #'0'
+.number:        add value, #'0'
                 ret

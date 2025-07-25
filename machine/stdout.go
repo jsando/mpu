@@ -15,27 +15,36 @@
 package machine
 
 import (
+	"math/rand"
 	"os"
 )
 
 const (
-	StdoutDeviceId     = 0x0100
-	StdoutCommandWrite = 1
+	StdioDeviceId = 0x0100
+	StdoutWrite   = 1
+	GetRandom     = 2
 )
 
 type StdoutWriteHandler struct {
-	Id       uint16 // 0x0101
+	IOHeader
 	PZString uint16 // pointer to zero-terminated string
 }
 
 func (s *StdoutWriteHandler) Handle(m Memory, addr uint16) (errCode uint16) {
-	// This could use copy to avoid creating a string just to print it, but this
-	// was simpler to code want the Memory interface for now.  For a toy 16 bit project
-	// I doubt anything writing to stdout is going to be a bottleneck.
 	str := m.ReadZString(s.PZString)
 	_, err := os.Stdout.WriteString(str)
 	if err != nil {
 		return ErrIOError
 	}
+	return ErrNoErr
+}
+
+type GetRandomHandler struct {
+	IOHeader
+	Random uint16
+}
+
+func (h *GetRandomHandler) Handle(m Memory, addr uint16) (errCode uint16) {
+	m.PutWord(addr+4, uint16(rand.Intn(65536)))
 	return ErrNoErr
 }

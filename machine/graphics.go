@@ -14,7 +14,6 @@
 
 package machine
 
-import "C"
 import (
 	"fmt"
 	"os"
@@ -62,7 +61,7 @@ func RegisterSDLHandlers(m *IODispatcher) {
 }
 
 type SdlInitHandler struct {
-	Id     uint16
+	IOHeader
 	Width  uint16
 	Height uint16
 	Title  uint16 // Pointer to zstring
@@ -87,7 +86,7 @@ func (c *SdlInitHandler) Handle(m Memory, addr uint16) uint16 {
 }
 
 type SdlPollHandler struct {
-	Id        uint16
+	IOHeader
 	EventType uint16 // space for response
 	Timestamp uint16 // space for response
 }
@@ -121,7 +120,7 @@ func (c *SdlPollHandler) Handle(m Memory, addr uint16) uint16 {
 }
 
 type SdlSetColorHandler struct {
-	Id         uint16
+	IOHeader
 	R, G, B, A uint8
 }
 
@@ -140,7 +139,7 @@ func (c SdlSetColorHandler) Handle(m Memory, addr uint16) uint16 {
 }
 
 type SdlClearHandler struct {
-	Id uint16
+	IOHeader
 }
 
 func (c *SdlClearHandler) Handle(m Memory, addr uint16) uint16 {
@@ -153,7 +152,7 @@ func (c *SdlClearHandler) Handle(m Memory, addr uint16) uint16 {
 }
 
 type SdlDrawLineHandler struct {
-	Id             uint16
+	IOHeader
 	X1, Y1, X2, Y2 uint16
 }
 
@@ -172,7 +171,7 @@ func (c SdlDrawLineHandler) Handle(m Memory, addr uint16) uint16 {
 }
 
 type SdlDrawRectHandler struct {
-	Id         uint16
+	IOHeader
 	X, Y, W, H uint16
 }
 
@@ -195,7 +194,7 @@ func (c *SdlDrawRectHandler) Handle(m Memory, addr uint16) uint16 {
 }
 
 type SdlFillRectHandler struct {
-	Id         uint16
+	IOHeader
 	X, Y, W, H uint16
 }
 
@@ -219,7 +218,7 @@ func (c SdlFillRectHandler) Handle(m Memory, addr uint16) uint16 {
 }
 
 type SdlPresentHandler struct {
-	Id      uint16
+	IOHeader
 	DelayMS uint16
 }
 
@@ -238,7 +237,7 @@ func (c *SdlPresentHandler) Handle(m Memory, addr uint16) uint16 {
 }
 
 type SdlTicksHandler struct {
-	Id    uint16
+	IOHeader
 	Ticks uint16
 }
 
@@ -250,7 +249,7 @@ func (s *SdlTicksHandler) Handle(m Memory, addr uint16) (errCode uint16) {
 }
 
 type SdlInitAudioHandler struct {
-	Id uint16
+	IOHeader
 }
 
 func (s *SdlInitAudioHandler) Handle(m Memory, addr uint16) (errCode uint16) {
@@ -267,7 +266,7 @@ func (s *SdlInitAudioHandler) Handle(m Memory, addr uint16) (errCode uint16) {
 }
 
 type SdlLoadWavHandler struct {
-	Id   uint16
+	IOHeader
 	Path uint16
 }
 
@@ -291,7 +290,7 @@ func (s *SdlLoadWavHandler) Handle(m Memory, addr uint16) (errCode uint16) {
 }
 
 type SdlPlayWavHandler struct {
-	Id   uint16
+	IOHeader
 	Path uint16
 }
 

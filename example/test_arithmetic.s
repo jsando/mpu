@@ -1,8 +1,6 @@
 // Unit tests for basic arithmetic operations
 // Run with: mpu test test_arithmetic.s
 
-        org 0x100
-
 //
 // Addition tests
 //

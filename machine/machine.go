@@ -203,7 +203,7 @@ func (m *Machine) Run() {
 		case Req:
 			// Execute request.  The operand is the address of the request structure.
 			if m.dispatcher != nil {
-				m.dispatcher.execIORequest(target)
+				m.dispatcher.execIORequest(uint16(value1))
 			}
 		}
 
