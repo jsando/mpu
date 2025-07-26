@@ -108,13 +108,13 @@ func (c *SdlPollHandler) Handle(m Memory, addr uint16) uint16 {
 		timestamp = uint16(event.GetTimestamp() / 250)
 		//fmt.Printf("sdl poll events (event=%d, time=%d)\n", eventType, timestamp)
 	}
-	m.PutWord(addr+2, eventType)
-	m.PutWord(addr+4, timestamp)
+	m.PutWord(addr+4, eventType)
+	m.PutWord(addr+6, timestamp)
 
 	switch t := event.(type) {
 	case *sdl.KeyboardEvent:
 		keyCode := uint16(t.Keysym.Sym)
-		m.PutWord(addr+6, keyCode)
+		m.PutWord(addr+8, keyCode)
 	}
 	return ErrNoErr
 }
