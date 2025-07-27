@@ -57,7 +57,7 @@ func main() {
 	runHelp := runCmd.Bool("help", false, "show help for run command")
 
 	fmtCmd := flag.NewFlagSet("fmt", flag.ContinueOnError)
-	rewrite := fmtCmd.Bool("w", false, "rewrite original file (not yet implemented)")
+	rewrite := fmtCmd.Bool("w", false, "rewrite file in place")
 	fmtHelp := fmtCmd.Bool("help", false, "show help for fmt command")
 
 	testCmd := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -194,10 +194,10 @@ func printFmtUsage() {
 	fmt.Println("Usage: mpu fmt [options] <file.s>")
 	fmt.Println()
 	fmt.Println("Formats assembly source code with consistent style.")
-	fmt.Println("Currently outputs to stdout - redirect to save formatted output.")
+	fmt.Println("By default outputs to stdout. Use -w to rewrite the file in place.")
 	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  -w         Rewrite file in place (not yet implemented)")
+	fmt.Println("  -w         Rewrite file in place")
 	fmt.Println("  --help     Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
@@ -228,9 +228,7 @@ func format(inputs []*os.File, rewrite bool) {
 		fmt.Fprintf(os.Stderr, "Usage: mpu fmt <file.s>\n")
 		os.Exit(1)
 	}
-	if rewrite {
-		fmt.Fprintf(os.Stderr, "Warning: -w flag is not yet implemented, outputting to stdout\n")
-	}
+
 	lexer := asm.NewLexer(inputs[0].Name(), inputs[0])
 	parser := asm.NewParser(asm.NewInput([]asm.TokenReader{lexer}))
 	parser.SetProcessInclude(false)
@@ -239,8 +237,40 @@ func format(inputs []*os.File, rewrite bool) {
 	if parser.HasErrors() {
 		os.Exit(1)
 	}
-	p := asm.NewPrinter(os.Stdout)
-	p.Print(parser.Statements())
+
+	if rewrite {
+		// Write to a temporary file first
+		tmpFile, err := ioutil.TempFile(filepath.Dir(inputs[0].Name()), ".mpu-fmt-*")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to create temporary file: %s\n", err)
+			os.Exit(1)
+		}
+		tmpName := tmpFile.Name()
+
+		// Format to the temporary file
+		p := asm.NewPrinter(tmpFile)
+		p.Print(parser.Statements())
+
+		// Close the temporary file
+		if err := tmpFile.Close(); err != nil {
+			os.Remove(tmpName)
+			fmt.Fprintf(os.Stderr, "Error: failed to write temporary file: %s\n", err)
+			os.Exit(1)
+		}
+
+		// Close the input file before overwriting
+		inputs[0].Close()
+
+		// Move the temporary file to the original file
+		if err := os.Rename(tmpName, inputs[0].Name()); err != nil {
+			os.Remove(tmpName)
+			fmt.Fprintf(os.Stderr, "Error: failed to write file: %s\n", err)
+			os.Exit(1)
+		}
+	} else {
+		p := asm.NewPrinter(os.Stdout)
+		p.Print(parser.Statements())
+	}
 }
 
 func getInputs(flagSet *flag.FlagSet) []*os.File {
