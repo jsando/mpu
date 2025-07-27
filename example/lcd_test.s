@@ -2,7 +2,7 @@
 
             include "lcd.s"
 
-            dw main
+            jmp main
 
 // Define font size, these are referenced from lcd.s
 LCD_CHAR_WIDTH  = 16
@@ -10,7 +10,6 @@ LCD_CHAR_SPACE  = 20
 LCD_LINE_SPACE  = 40
 
 // Constants
-REG_IO_REQ      = 6
 SCREEN_WIDTH    = 800
 SCREEN_HEIGHT   = 600
 SDL_QUIT        = 0x100
@@ -19,7 +18,6 @@ SDL_KEYUP       = 0x301
 SDLK_ESCAPE     = 0x1b 
 
 // Globals
-                    org 0x10
 
 quit:               dw 0
 
@@ -42,10 +40,10 @@ main():
 // Initialize the display.
 //
 InitScreen():
-            cpy REG_IO_REQ, #init
+            req #init
             ret
 
-.init:       dw 0x0201              // graphics, initialize
+.init:       dw 0x0201, 0              // graphics, initialize
             dw SCREEN_WIDTH
             dw SCREEN_HEIGHT
             dw title
@@ -56,7 +54,7 @@ InitScreen():
 //
 PollEvents():
 .loop:
-            cpy REG_IO_REQ, #poll
+            req #poll
             cmp poll_event, #SDL_QUIT
             jne isKeyDown
             cpy quit, #1
@@ -81,7 +79,7 @@ PollEvents():
 .exit:
             ret
 
-.poll:       dw 0x0202           // graphics, poll
+.poll:       dw 0x0202, 0           // graphics, poll
 .poll_event: dw 0                // space for response event type id
 .poll_time:  dw 0                // space for response event timestamp (1/4 second since init)
 .keycode:
@@ -108,35 +106,35 @@ onKeyUp(keycode word):
 //
 DrawScreen():
             // Clear the screen to black
-            cpy REG_IO_REQ, #color
-            cpy REG_IO_REQ, #clear
+            req #color
+            req #clear
 
             // temp to test my drawstring
-            cpy REG_IO_REQ, #white
+            req #white
             cpy tx, #0
             cpy ty, #0
             psh #sample
             jsr DrawString
             pop #2
-            cpy REG_IO_REQ, #present
+            req #present
             ret
 
             // device request to set color
-.color:      dw 0x0205
+.color:      dw 0x0205, 0
 .color_r:    db 0
 .color_g:    db 0
 .color_b:    db 0
 .color_a:    db 255
 
             // device request to clear screen
-.clear:      dw 0x0204
+.clear:      dw 0x0204, 0
 
             // device request to present backbuffer to screen
-.present:    dw 0x0203
+.present:    dw 0x0203, 0
             dw 10               // delay ms
-.white:      dw 0x0205
+.white:      dw 0x0205, 0
             db 255,0,0,255
-.line:       dw 0x0206
+.line:       dw 0x0206, 0
             dw SCREEN_WIDTH / 2
             dw 0
             dw SCREEN_WIDTH / 2
