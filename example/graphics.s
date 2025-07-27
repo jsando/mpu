@@ -1,38 +1,32 @@
 // Simple graphics tests.
-    dw main
-
-IO_REQUEST = 6
-IO_STATUS  = 8
-RANDOM = 10
-
-    org 0x100
 main():
     var i word
 
     // Initialize main window
-    cpy IO_REQUEST, #io_window_req
+    req #io_window_req
 
 .loop:
     // poll for events until no more
-    cpy IO_REQUEST, #io_poll_req
+    req #io_poll_req
     cmp io_poll_event, #0
     jne loop
 
-    cpy IO_REQUEST, #io_sdl_setcolor
-    cpy IO_REQUEST, #io_sdl_clear
+    req #io_sdl_setcolor
+    req #io_sdl_clear
 
     // Draw random colored rectangles
     cpy i, #20
 .draw_rects:
     jsr RandomFilledRect
+
     dec i
     jne draw_rects
 
-    cpy IO_REQUEST, #io_present_req
+    req #io_present_req
     jmp loop
 
 .io_window_req:
-    dw 0x0201
+    dw 0x0201, 0
     dw 640  // width
     dw 480  // height
     dw window_title
@@ -40,7 +34,7 @@ main():
     db "Hello World, from MPU!", 0
 
 .io_poll_req:
-    dw 0x0202
+    dw 0x0202, 0
 .io_poll_event:
     dw 2
 .io_poll_time:
@@ -48,28 +42,34 @@ main():
     ds 8 // space for event data
 
 .io_present_req:
-    dw 0x0203
+    dw 0x0203, 0
     dw 16 // delay ms
 
 .io_sdl_clear:
-    dw 0x0204
+    dw 0x0204, 0
 
 .io_sdl_setcolor:
-    dw 0x0205
+    dw 0x0205, 0
     db 0,0,0,255
 
 // result = value - (value / range * range)
 Random(result word, range word):
     var i word
     var j word
-    cpy i, RANDOM   // get a random number in range 0-65535
-    cpy j, i        // value / range * range
+    req #GetRandom
+    cpy i, RandomResult
+    cpy j, i
     div j, range
     mul j, range
     cpy result, i
     sec
     sub result, j
     ret
+
+.GetRandom:
+    dw 0x0102, 0
+.RandomResult:
+    dw 0
 
 RandomFilledRect():
     // .rect_x = random(640)
@@ -122,18 +122,19 @@ RandomFilledRect():
     pop #1
     clb
 
-    cpy IO_REQUEST, #color
-    cpy IO_REQUEST, #rect
+    req #color
+    req #rect
     ret
 
-.color:      dw 0x0205
+.color:      dw 0x0205, 0
 .color_r:    db 0
 .color_g:    db 0
 .color_b:    db 0
 .color_a:    db 255
 
-.rect:       dw 0x0208
+.rect:       dw 0x0208, 0
 .rect_x:     dw 0
 .rect_y:     dw 0
 .rect_w:     dw 0
 .rect_h:     dw 0
+
