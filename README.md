@@ -8,9 +8,9 @@ Features:
 
 * 16 bit address space
 * Instructions can operate on bytes or words
-* Built in graphics, stdout, extensible hardware (could support network and file i/o easily)
 * Stack starts at 0xffff and grows down
 * Frame pointer makes it easy to write reusable/reentrant functions
+* Built in graphics and sound, extensible hardware
 
 Example:
 ```asm
@@ -210,7 +210,7 @@ Registers and flags:
 
 All registers and flags are zero on power-on.
 
-An program image is loaded to address 0x0000 in memory.  
+A program image is loaded to address 0x0000 in memory.  
 
 Once the image is loaded, execution begins at the address pointed to be the Program Counter, which is zero initially.
 
@@ -289,24 +289,24 @@ One of the ways the 6502 reduced the number of bytes of a program was by leverag
 
 ## Opcodes (left column is high nibble, top is low nibble)
 
-|       |     0     |     1     |     2     |     3     |     4     |    5     |     6     |     7     |    8     |     9     |     A     |     B     |    C     |    D     |     E     |     F     |
-|:-----:|:---------:|:---------:|:---------:|:---------:|:---------:|:--------:|:---------:|:---------:|:--------:|:---------:|:---------:|:---------:|:--------:|:--------:|:---------:|:---------:|
-| **0** |    hlt    |           |           |           |           |          |           |           |          |           |           |           |          |          |           |           |
-| **1** |  add a,a  |  sub a,a  |  mul a,a  |  div a,a  |  and a,a  |  or a,a  |  xor a,a  |  cpy a,a  | add a,#  |  sub a,#  |  mul a,#  |  div a,#  | and a,#  |  or a,#  |  xor a,#  |  cpy a,#  |
-| **2** |  add a,*  |  sub a,*  |  mul a,*  |  div a,*  |  and a,*  |  or a,*  |  xor a,*  |  cpy a,*  | add a,r  |  sub a,r  |  mul a,r  |  div a,r  | and a,r  |  or a,r  |  xor a,r  |  cpy a,r  |
-| **3** | add a,*r  | sub a,*r  | mul a,*r  | div a,*r  | and a,*r  | or a,*r  | xor a,*r  | cpy a,*r  | add *,a  |  sub *,a  |  mul *,a  |  div *,a  | and *,a  |  or *,a  |  xor *,a  |  cpy *,a  |
-| **4** |  add *,#  |  sub *,#  |  mul *,#  |  div *,#  |  and *,#  |  or *,#  |  xor *,#  |  cpy *,#  | add *,r  |  sub *,r  |  mul *,r  |  div *,r  | and *,r  |  or *,r  |  xor *,r  |  cpy *,r  |
-| **5** | add *,*r  | sub *,*r  | mul *,*r  | div *,*r  | and *,*r  | or *,*r  | xor *,*r  | cpy *,*r  | add r,a  |  sub r,a  |  mul r,a  |  div r,a  | and r,a  |  or r,a  |  xor r,a  |  cpy r,a  |
-| **6** |  add r,#  |  sub r,#  |  mul r,#  |  div r,#  |  and r,#  |  or r,#  |  xor r,#  |  cpy r,#  | add r,*  |  sub r,*  |  mul r,*  |  div r,*  | and r,*  |  or r,*  |  xor r,*  |  cpy r,*  |
-| **7** |  add r,r  |  sub r,r  |  mul r,r  |  div r,r  |  and r,r  |  or r,r  |  xor r,r  |  cpy r,r  | add r,*r | sub  r,*r | mul  r,*r | div  r,*r | and r,*r | or  r,*r | xor  r,*r | cpy  r,*r |
-| **8** | add *r,a  | sub *r,a  | mul *r,a  | div *r,a  | and *r,a  | or *r,a  | xor *r,a  | cpy *r,a  | add *r,# | sub *r,#  | mul *r,#  | div *r,#  | and *r,# | or *r,#  | xor *r,#  | cpy *r,#  |
-| **9** | add  *r,* | sub *r,*  | mul *r,*  | div *r,*  | and *r,*  | or *r,*  | xor *r,*  | cpy *r,*  | add *r,r | sub *r,r  | mul *r,r  | div *r,r  | and *r,r | or *r,r  | xor *r,r  | cpy *r,r  |
-| **A** | add *r,*r | sub *r,*r | mul *r,*r | div *r,*r | and *r,*r | or *r,*r | xor *r,*r | cpy *r,*r |          |           |           |           |          |          |           |           |
-| **B** |   psh a   |   pop a   |   inc a   |   dec a   |    sec    |   clc    |    seb    |    clb    |   ret    |    rst    |  sav #b   |    sea    |  req #   |  req a   |   req r   |           |
-| **C** |   psh *   |   pop *   |   inc *   |   dec *   |  cmp a,#  | cmp a,a  |  cmp a,*  |  cmp a,r  | cmp a,*r |  cmp *,#  |  cmp *,a  |  cmp *,*  | cmp *,r  | cmp *,*r |  cmp r,#  |  cmp r,a  |
-| **D** |   psh r   |   pop r   |   inc r   |   dec r   |  cmp r,*  | cmp r,r  | cmp r,*r  | cmp *r,#  | cmp *r,a | cmp *r,*  | cmp *r,r  | cmp *r,*r |          |          |           |           |
-| **E** |  psh *r   |  pop *r   |  inc *r   |  dec *r   |   jmp #   |  jeq ob  |  jne ob   |  jge ob   |  jlt ob  |  jcc ob   |  jcs ob   |   jsr #   |          |          |           |           |
-| **F** |   psh #   |  pop #b   |           |           |           |          |           |           |          |           |           |           |          |          |           |           |
+|       |     0      |     1     |     2     |     3     |     4     |    5     |     6     |     7     |    8     |     9     |     A     |     B     |    C     |     D      |     E     |     F     |
+|:-----:|:----------:|:---------:|:---------:|:---------:|:---------:|:--------:|:---------:|:---------:|:--------:|:---------:|:---------:|:---------:|:--------:|:----------:|:---------:|:---------:|
+| **0** |    hlt     |           |           |           |           |          |           |           |          |           |           |           |          |            |           |           |
+| **1** |  add a,a   |  sub a,a  |  mul a,a  |  div a,a  |  and a,a  |  or a,a  |  xor a,a  |  cpy a,a  | add a,#  |  sub a,#  |  mul a,#  |  div a,#  | and a,#  |   or a,#   |  xor a,#  |  cpy a,#  |
+| **2** |  add a,\*   |  sub a,\*  |  mul a,\*  |  div a,\*  |  and a,\*  |  or a,\*  |  xor a,\*  |  cpy a,\*  | add a,r  |  sub a,r  |  mul a,r  |  div a,r  | and a,r  |   or a,r   |  xor a,r  |  cpy a,r  |
+| **3** |  add a,\*r  | sub a,\*r  | mul a,\*r  | div a,\*r  | and a,\*r  | or a,\*r  | xor a,\*r  | cpy a,\*r  | add \*,a  |  sub \*,a  |  mul \*,a  |  div \*,a  | and \*,a  |   or \*,a   |  xor \*,a  |  cpy \*,a  |
+| **4** |  add \*,#   |  sub \*,#  |  mul \*,#  |  div \*,#  |  and \*,#  |  or \*,#  |  xor \*,#  |  cpy \*,#  | add \*,r  |  sub \*,r  |  mul \*,r  |  div \*,r  | and \*,r  |   or \*,r   |  xor \*,r  |  cpy \*,r  |
+| **5** |  add \*,\*r  | sub \*,\*r  | mul \*,\*r  | div \*,\*r  | and \*,\*r  | or \*,\*r  | xor \*,\*r  | cpy \*,\*r  | add r,a  |  sub r,a  |  mul r,a  |  div r,a  | and r,a  |   or r,a   |  xor r,a  |  cpy r,a  |
+| **6** |  add r,#   |  sub r,#  |  mul r,#  |  div r,#  |  and r,#  |  or r,#  |  xor r,#  |  cpy r,#  | add r,\*  |  sub r,\*  |  mul r,\*  |  div r,\*  | and r,\*  |   or r,\*   |  xor r,\*  |  cpy r,\*  |
+| **7** |  add r,r   |  sub r,r  |  mul r,r  |  div r,r  |  and r,r  |  or r,r  |  xor r,r  |  cpy r,r  | add r,\*r | sub  r,\*r | mul  r,\*r | div  r,\*r | and r,\*r |  or  r,\*r  | xor  r,\*r | cpy  r,\*r |
+| **8** |  add \*r,a  | sub \*r,a  | mul \*r,a  | div \*r,a  | and \*r,a  | or \*r,a  | xor \*r,a  | cpy \*r,a  | add \*r,# | sub \*r,#  | mul \*r,#  | div \*r,#  | and \*r,# |  or \*r,#   | xor \*r,#  | cpy \*r,#  |
+| **9** | add  \*r,\* | sub \*r,\* | mul \*r,\* | div \*r,\* | and \*r,\* | or \*r,\* | xor \*r,\* | cpy \*r,\* | add \*r,r | sub \*r,r  | mul \*r,r  | div \*r,r  | and \*r,r |  or \*r,r   | xor \*r,r  | cpy \*r,r  |
+| **A** | add \*r,\*r  | sub \*r,\*r | mul \*r,\*r | div \*r,\*r | and \*r,\*r | or \*r,\*r | xor \*r,\*r | cpy \*r,\*r |          |           |           |           |          |            |           |           |
+| **B** |   psh a    |   pop a   |   inc a   |   dec a   |    sec    |   clc    |    seb    |    clb    |   ret    |    rst    |  sav #b   |    sea    |  req #   |   req a    |   req r   |           |
+| **C** |   psh \*    |   pop \*   |   inc \*   |   dec \*   |  cmp a,#  | cmp a,a  |  cmp a,\*  |  cmp a,r  | cmp a,\*r |  cmp \*,#  |  cmp \*,a  | cmp \*,\* | cmp \*,r | cmp \*,\*r |  cmp r,#  |  cmp r,a  |
+| **D** |   psh r    |   pop r   |   inc r   |   dec r   |  cmp r,\*  | cmp r,r  | cmp r,\*r  | cmp \*r,#  | cmp \*r,a | cmp \*r,\* | cmp \*r,r  | cmp \*r,\*r |          |            |           |           |
+| **E** |   psh \*r   |  pop \*r   |  inc \*r   |  dec \*r   |   jmp #   |  jeq ob  |  jne ob   |  jge ob   |  jlt ob  |  jcc ob   |  jcs ob   |   jsr #   |          |            |           |           |
+| **F** |   psh #    |  pop #b   |           |           |           |          |           |           |          |           |           |           |          |            |           |           |
 
 Suppose you want to pop a word off the stack and store it to address 1234 (0x4d2 in hex), find "pop a" above which means pop with absolute address.  The opcode would be "B1" for the instruction, and it would be encoded followed by the address in little-endian format as follows:
 
