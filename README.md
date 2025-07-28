@@ -238,37 +238,39 @@ Is effectively:
 
     a = a + b
 
-* Hlt - Halt processing.  If run from the command line this signals an exit.
-* Add - Add, with carry.  a += b
-* Sub - Subtract, with carry. a -= b
-* Mul - multiply. a *= b
-* Div - divide.  a /= b
-* And - bitwise and.  a &= b
-* Or - bitwise or.  a |= b
-* Xor - bitwise exclusive-or.  a ^= b
-* Cpy - copy. a = b
-* Cmp - Compare.  Its like sub but without storing the result, but it updates the flags.
-* Inc - Increment by 1.  Can use clc/add but this is shorter.
-* Dec - Decrement by 1.  Can use sec/sub but this is shorter.
-* Psh - Push operand on the stack.
-* Pop - Pop values off the stack.
-* Jsr - Jump to subroutine.  Pushes the return address on the stack, so ret/rst can return.
-* Jmp - Unconditional jump.  Like goto.  Operand is a 16 bit address.
-* Jeq - Jump if equal/zero.  Operand is 8 bit offset, max 127/-128.
-* Jne - Jump if not equal/not zero.  Operand is 8 bit offset, max 127/-128.
-* Jge - Jump if greater than or equal to.  Operand is 8 bit offset, max 127/-128.
-* Jlt - Jump if less than. Operand is 8 bit offset, max 127/-128.
-* Jcc - Jump if carry clear.  Operand is 8 bit offset, max 127/-128.
-* Jcs - Jump if carry set.  Operand is 8 bit offset, max 127/-128.
-* Sav - Save the framepointer, set it to the stack pointer, and allocate space for local vars (#bytes).
-* Seb - Set bytes mode flag.
-* Clb - Clear bytes mode flag.
-* Clc - Clear carry flag.
-* Sec - Set carry flag.
-* Sea - Set assertion flag (for unit tests - affects next CMP instruction).
-* Ret - Return from subroutine, using 16 bit address on top of stack.
-* Rst - Restore framepointer and return from subroutine.
-* Req - System Request
+| Instruction | Description                | Example      | Notes                                                 |
+|-------------|----------------------------|--------------|-------------------------------------------------------|
+| **HLT**     | Halt processing            | hlt          |                                                       |
+| **ADD**     | Add with carry             | add op1, op2 | `op1 = op1 + op2`                                     |
+| **SUB**     | Subtract with carry        | sub op1, op2 | `op1 = op1 - op2`                                     |
+| **MUL**     | Multiply                   | mul op1, op2 | `op1 = op1 * op2`                                     |
+| **DIV**     | Divide                     | div op1, op2 | `op1 = op1 / op2`                                     |
+| **AND**     | Bitwise AND                | and op1, op2 | `op1 = op1 & op2`                                     |
+| **OR**      | Bitwise OR                 | or op1, op2  | `op1 = op1 \| op2`                                    |
+| **XOR**     | Bitwise exclusive-OR       | xor op1, op2 | `op1 = op1 ^ op2`                                     |
+| **CPY**     | Copy                       | cpy op1, op2 | `op1 = op2`                                           |
+| **CMP**     | Compare                    | cmp op1, op2 | `op1 - op2`                                           |
+| **INC**     | Increment by 1             | inc op1      | `op1 = op1 + 1`                                       |
+| **DEC**     | Decrement by 1             | dec op1      | `op1 = op1 - 1`                                       |
+| **PSH**     | Push operand on stack      | push op1     | Push op1 on stack                                     |
+| **POP**     | Pop values off stack       | pop op1      | Pop value off stack and store in op1 (or pop N bytes) |
+| **JSR**     | Jump to subroutine         | jsr label    | Pushes return address on stack for use by ret or rst  |
+| **JMP**     | Unconditional jump         | jmp label    | Operand is 16-bit address                             |
+| **JEQ**     | Jump if equal/zero         | jeq label    | Jump if zero flag set                                 |
+| **JNE**     | Jump if not equal/not zero | jne label    | Jump if zero flag clear                               |
+| **JGE**     | Jump if greater or equal   | jge label    | Jump if negative flag clear                           |
+| **JLT**     | Jump if less than          | jlt label    | Jump if negative flag set                             |
+| **JCC**     | Jump if carry clear        | jcc label    | Jump if carry clear                                   |
+| **JCS**     | Jump if carry set          | jcs label    | Jump if carry set                                     |
+| **SAV**     | Save frame pointer         | sav count    | Sets FP to SP and allocates count variable space      |
+| **SEB**     | Set bytes mode flag        | seb          | Switch to 8-bit mode                                  |
+| **CLB**     | Clear bytes mode flag      | clb          | Switch to 16-bit mode                                 |
+| **CLC**     | Clear carry flag           | clc          |                                                       |
+| **SEC**     | Set carry flag             | sec          |                                                       |
+| **SEA**     | Set assertion flag         | sea          | For unit tests - affects next CMP                     |
+| **RET**     | Return from subroutine     | ret          | Uses 16-bit address on stack                          |
+| **RST**     | Restore FP and return      | rst          | Restores frame pointer before returning               |
+| **REQ**     | Peripheral request         | req op1      | Request to external device (ex: graphics or sound)    |
 
 ## Address Modes
 
@@ -312,7 +314,7 @@ Suppose you want to pop a word off the stack and store it to address 1234 (0x4d2
 
 # Input/Output
 
-MPU can interact with peripherals via its Peripheral Interface Adapter.  The PIA handles the system request ("req") instruction by delegating to the proper PIA sub-controller, which reads memory as needed for the request via the PIA and MMU.  Basically the program sends messages to the PIA which works with the attached peripherals to service the message.
+MPU can interact with peripherals via its Peripheral Interface Adapter.  The PIA handles the request ("req") instruction by delegating to the proper PIA sub-controller, which reads memory as needed for the request via the PIA and MMU.  Basically the program sends messages to the PIA which works with the attached peripherals to service the message.
 
 ![MPU Block Diagram](images/mpu-block-diagram-2.drawio.svg)
 
