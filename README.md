@@ -2,17 +2,38 @@
 
 ## Overview
 
-MPU is a (virtual) 16 bit computer system, with a small enough instruction set to be easy to learn and play with but (hopefully) not so small that its just annoying.  At least, to someone used to assembly :) 
-
-It is named MPU because it has no general purpose registers ... all operations are directly on main memory, of which there is 64Kb.  It has a Program Counter, a Stack Pointer, and Frame Pointer located in memory at address 0, 2, and 4 respectively.  There are also flags such as the carry flag, zero flag, negative flag.  
+MPU is a (virtual) 16 bit computer system, with a small enough instruction set to be easy to learn, yet complete enough to be fun to work with.  It is named MPU because it has no general purpose registers ... all operations are directly on main memory, of which there is 64Kb.  It has a Program Counter, a Stack Pointer, and Frame Pointer.  There are also flags such as the carry flag, zero flag, negative flag.  
 
 Features:
 
 * 16 bit address space
 * Instructions can operate on bytes or words
 * Built in graphics, stdout, extensible hardware (could support network and file i/o easily)
-* Stack can be anywhere in memory and grows downward
+* Stack starts at 0xffff and grows down
 * Frame pointer makes it easy to write reusable/reentrant functions
+
+Example:
+```asm
+   1: 0x0000  ---------- example/stdio_test.s ----------
+   1: 0x0000                       include "stdio.s"
+   2: 0x0000                       include "strconv.s"
+   3: 0x0000               
+   4: 0x0000               //---------------------------------------------------------
+   5: 0x0000               //  Print the numbers from 1 to 100 to the console.
+   6: 0x0000               //---------------------------------------------------------
+   7: 0x0000  ba02         main():
+   8: 0x0002                       var i word          // Declare variable 'i' as a word (on the stack)
+   9: 0x0002  67fe0100             cpy i, #1           // i = 1
+  10: 0x0006               .loop:
+  11: 0x0006  d0fe                 psh i               // push i on stack
+  12: 0x0008  eb1900               jsr PrintInteger    // print i
+  13: 0x000b  f102                 pop #2              // remove 2 bytes (i) from stack
+  14: 0x000d  eb3e00               jsr Println         // print newline
+  15: 0x0010  d2fe                 inc i               // i = i + 1
+  16: 0x0012  cefe6500             cmp i, #101         // i >= 100?
+  17: 0x0016  e8f0                 jlt loop            // jump if less than to 'loop'
+  18: 0x0018  00                   hlt                 // halt
+```
 
 MPU is also the name of a fictional US military satellite that became self-aware and decided to redraw giant animals on the face of the Earth using lasers to keep it company.
 
@@ -117,12 +138,9 @@ mpu test -v example/test_*.s
 ## Format Source
 
 ```
-mpu fmt file
+mpu fmt [-w] file
 
-Parse and pretty-print the input file to stdout.  If I ever 
-get enough unit tests I'll add the flag to rewrite in place 
-but for now redirect to a new file, diff and make sure it 
-looks good, then rename or copy-paste.
+Parse and pretty-print the input file to stdout, or with -w rewrite original file. 
 
 ```
 # Examples
@@ -175,38 +193,30 @@ Press 'k' to drop fast.
 
 ### Programming Model
 
-Memory-mapped registers:
+Registers and flags:
 
-| Address   | 8 bits (lo)          | 8 bits (hi)          |
-|-----------|----------------------|----------------------|
-| 0x00      | Program Counter (lo) | Program Counter (hi) |
-| 0x02      | Stack Pointer (lo)   | Stack Pointer (hi)   |
-| 0x04      | Frame Pointer (lo)   | Frame Pointer (hi)   |
-| 0x06      | IO Request (lo)      | IO Request (hi)      |
-| 0x08      | IO Status (lo)       | IO Status (hi)       |
-| 0x0a      | Random (lo)          | Random (hi)          |
-| 0x0c-0x0f | Reserved             |                      |
-
-### Flags
-
-| Flag     | Power-On State | Usage                                                                 |
-|----------|----------------|-----------------------------------------------------------------------|
-| Zero     | Clear          | Set if last value written was zero, clear if not.                     |
-| Negative | Clear          | Set if last value written had its high bit set.                       |
-| Carry    | Clear          | Set / clear as used by add/sub.                                       |
-| Bytes    | Clear          | Bytes flag if set all instructions operate on bytes instead of words. |
+| Register             | Size (bits) | Purpose                                                              |
+|----------------------|-------------|----------------------------------------------------------------------|
+| Program Counter (PC) | 16          | Address of next instruction to execute.                              |
+| Stack Pointer (SP)   | 16          | Address of top of stack + 1                                          |
+| Frame Pointer (FP)   | 16          | Address within stack for fp-relative addressing                      |
+| Zero Flag            | 1           | Set if last value was zero, clear if not                             |
+| Negative Flag        | 1           | Set if last value had its high bit set                               |
+| Carry Flag           | 1           | Set / clear as used by add/sub                                       |
+| Bytes Flag           | 1           | If set, all instructions operate on bytes instead of words           |
+| Assertion Flag       | 1           | If set, next compare instruction will trigger assertion (unit tests) |
 
 ### Power On
 
-An image is loaded to address 0x0000 in memory.  The image is expected to set the Program Counter to the main function.  The stack pointer can be left at 0x0000, which will let it grown downward starting from 0xffff for the first value (or it can be set to any arbitrary address above 0x10).  Loading the initial image into RAM does not set the IO or RNG registers however.
+All registers and flags are zero on power-on.
 
-Once the image is loaded, execution begins at the address pointed to be the Program Counter.
+An program image is loaded to address 0x0000 in memory.  
+
+Once the image is loaded, execution begins at the address pointed to be the Program Counter, which is zero initially.
 
 Instructions are encoded in variable-length packets.  Opcodes are always 1 byte, and depending on the addressing mode are followed by zero to 4 additional bytes.
 
 There is no built-in firmware, operating system, interpreter, etc.  Program images for MPU are sort of like game catridges ... whatever is in there when you power it on, that's what you've got.  Programs can use the full 64Kb address space for code and data.
-
-Speaking of code and data, much like a 1980's era computer there is no separation.  Code is free to write data anywhere, or even output code dynamically and then invoke it.
 
 ## Byte vs Word Modes
 
@@ -258,6 +268,7 @@ Is effectively:
 * Sea - Set assertion flag (for unit tests - affects next CMP instruction).
 * Ret - Return from subroutine, using 16 bit address on top of stack.
 * Rst - Restore framepointer and return from subroutine.
+* Req - System Request
 
 ## Address Modes
 
@@ -295,20 +306,24 @@ One of the ways the 6502 reduced the number of bytes of a program was by leverag
 | **E** |  psh *r   |  pop *r   |  inc *r   |  dec *r   |   jmp #   |  jeq ob  |  jne ob   |  jge ob   |  jlt ob  |  jcc ob   |  jcs ob   |   jsr #   |          |          |           |           |
 | **F** |   psh #   |  pop #b   |           |           |           |          |           |           |          |           |           |           |          |          |           |           |
 
+Suppose you want to pop a word off the stack and store it to address 1234 (0x4d2 in hex), find "pop a" above which means pop with absolute address.  The opcode would be "B1" for the instruction, and it would be encoded followed by the address in little-endian format as follows:
+
+    b1 d2 04    // pop 0x04d2
+
 # Input/Output
 
-MPU can have awesome graphics adapters and other things attached easily using the Peripheral Management Interface (PMI).  The PMI is accessed from code by writing to address 0x06, and reading the status of a prior request from address 0x08.  The value written to the PMI request register at 0x06 must be a (16 bit) pointer to memory which contains the actual request.  All requests start with a 2-byte header that includes the device id and request number, followed by additional parameters depending on the type of request.
+MPU can interact with peripherals via its Peripheral Interface Adapter.  The PIA handles the system request ("req") instruction by delegating to the proper PIA sub-controller, which reads memory as needed for the request via the PIA and MMU.  Basically the program sends messages to the PIA which works with the attached peripherals to service the message.
+
+![MPU Block Diagram](images/mpu-block-diagram-2.drawio.svg)
 
 Here is an example to write "Hello, world!" to standard output:
 
 ```
-                dw main          // Set initial PC to start at main
-                org 0x10
-main:
-                cpy 0x06,#myreq
+                req #myreq
                 hlt 
 
 myreq:          dw 0x0101       // stdout / putchars
+                dw 0            // space for error code
                 dw hello        // pointer to zero terminated string
 hello:          db "Hello, world!",0x0a,0x00
 
@@ -322,6 +337,7 @@ Write to stdout:
 
 ```
 Id       uint16 // 0x0101
+ErrCode  uint16 // returns non-zero on error
 PZString uint16 // pointer to zero-terminated string
 ```
 
@@ -344,10 +360,11 @@ SDL Initialize (Open Window):
 Create an SDL window, it will remain until the program terminates.
 
 ```
-Id     uint16 // 0x0201
-Width  uint16 // Window with in pixels
-Height uint16 // Window height in pixels
-Title  uint16 // Pointer to zstring
+Id       uint16 // 0x0201
+ErrCode  uint16 // returns non-zero on error
+Width    uint16 // Window with in pixels
+Height   uint16 // Window height in pixels
+Title    uint16 // Pointer to zstring
 ```
 
 Poll Events:
@@ -356,6 +373,7 @@ This must be called in a main loop to dequeue events like mouse movement, keyboa
 
 ```
 Id        uint16    // 0x0202
+ErrCode   uint16    // returns non-zero on error
 EventType uint16    // SDL event type if < 65536 (see https://wiki.libsdl.org/SDL_Event)
 Timestamp uint16    // Event timestamp as 1/4 second since SDL init
 Data      [4]uint16 // moar response (right now, just 16 bit KeyCode if its a keyevent)
@@ -365,6 +383,7 @@ Present:
 
 ```
 Id      uint16      // 0x0203
+ErrCode uint16      // returns non-zero on error
 DelayMS uint16      // Optional delay in milliseconds, 0-65535 (16 = 60fps approx)
 ```
 
@@ -373,7 +392,9 @@ Clear Screen:
 Clear the window to the current draw color.
 
 ```
-Id uint16           // 0x0204
+Id      uint16 // 0x0204
+ErrCode uint16 // returns non-zero on error
+
 ```
 
 Set Draw Color:
@@ -382,6 +403,7 @@ Sets the current drawing color, for subsequent clear, drawline, drawrect, or fil
 
 ```
 Id         uint16   // 0x0205
+ErrCode    uint16   // returns non-zero on error
 R, G, B, A uint8    // Red, Green, Blue, Alpha as values in range 0-255
 ```
 
@@ -389,6 +411,7 @@ Draw Line:
 
 ```
 Id             uint16   // 0x0206
+ErrCode        uint16   // returns non-zero on error
 X1, Y1, X2, Y2 uint16   // Draw line from (x1,y1) to (x2,y2)
 ```
 
@@ -398,6 +421,7 @@ Draw an emptyrectangle using lines in the current draw color.
 
 ```
 Id         uint16       // 0x0207 
+ErrCode    uint16       // returns non-zero on error
 X, Y, W, H uint16       // Draw a rectangle from (x,y) to (x+w-1,y+h-1)
 ```
 
@@ -407,6 +431,7 @@ Draw a colored rectangle in the current draw color.
 
 ```
 Id         uint16       // 0x0207 
+ErrCode    uint16       // returns non-zero on error
 X, Y, W, H uint16       // Draw a rectangle from (x,y) to (x+w-1,y+h-1)
 ```
 
@@ -415,8 +440,9 @@ Get Ticks:
 Get the number of seconds elapsed since SDL init was called.
 
 ```
-Id    uint16      // 0x0209
-Ticks uint16      // Return value
+Id      uint16      // 0x0209
+ErrCode uint16      // returns non-zero on error
+Ticks   uint16      // Return value
 ```
 
 Initialize SDL Audio:
@@ -424,7 +450,8 @@ Initialize SDL Audio:
 Must be called once before loading or playing any sound files.
 
 ```
-Id uint16   // 0x020a
+Id      uint16   // 0x020a
+ErrCode uint16   // returns non-zero on error
 ```
 
 Load WAV File:
@@ -432,8 +459,9 @@ Load WAV File:
 Load a WAV audio file in preparation to be played.  These are used as sound effects.
 
 ```
-Id   uint16 // 0x020b
-Path uint16 // Pointer to zero-terminated string, path to .wav file (relative to .bin/.s)
+Id      uint16 // 0x020b
+ErrCode uint16 // returns non-zero on error
+Path    uint16 // Pointer to zero-terminated string, path to .wav file (relative to .bin/.s)
 ```
 
 Play WAV File:
@@ -441,8 +469,9 @@ Play WAV File:
 Play the previously loaded WAV file of the same name.  Can be called numerous times on the same path.
 
 ```
-Id   uint16 // 0x020b
-Path uint16 // Pointer to zero-terminated string, path to .wav file (relative to .bin/.s)
+Id      uint16 // 0x020c
+ErrCode uint16 // returns non-zero on error
+Path    uint16 // Pointer to zero-terminated string, path to .wav file (relative to .bin/.s)
 ```
 
 # System Monitor
@@ -515,7 +544,7 @@ The quickest way to learn the assembler syntax is to look as some of the example
 
 ## Symbols
 
-There are 4 types of symbols:
+There are four types of symbols:
 
 * Equates, which are constants
 * Labels, which are defined as the current value of the program counter
