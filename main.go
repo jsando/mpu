@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/jsando/mpu/asm"
+	"github.com/jsando/mpu/debugger"
 	"github.com/jsando/mpu/machine"
 	"github.com/jsando/mpu/test"
 )
@@ -54,10 +55,11 @@ func main() {
 
 	runCmd := flag.NewFlagSet("run", flag.ContinueOnError)
 	sysmon := runCmd.Bool("m", false, "open system monitor/debugger")
+	debug := runCmd.Bool("d", false, "open enhanced debugger")
 	runHelp := runCmd.Bool("help", false, "show help for run command")
 
 	fmtCmd := flag.NewFlagSet("fmt", flag.ContinueOnError)
-	rewrite := fmtCmd.Bool("w", false, "rewrite original file (not yet implemented)")
+	rewrite := fmtCmd.Bool("w", false, "rewrite file in place")
 	fmtHelp := fmtCmd.Bool("help", false, "show help for fmt command")
 
 	testCmd := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -101,7 +103,7 @@ func main() {
 			os.Exit(0)
 		}
 		inputs := getInputs(runCmd)
-		run(inputs, *sysmon)
+		run(inputs, *sysmon, *debug)
 	case "fmt":
 		if err := fmtCmd.Parse(os.Args[2:]); err != nil {
 			os.Exit(1)
@@ -178,12 +180,14 @@ func printRunUsage() {
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  -m         Open system monitor/debugger for single-stepping")
+	fmt.Println("  -d         Open enhanced debugger with breakpoints and source view")
 	fmt.Println("  --help     Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  mpu run example/hello.s")
 	fmt.Println("  mpu run game.bin")
 	fmt.Println("  mpu run -m debug_this.s")
+	fmt.Println("  mpu run -d example/hello.s")
 	fmt.Println()
 	fmt.Println("Graphics programs:")
 	fmt.Println("  - Press ESC to quit")
@@ -194,10 +198,10 @@ func printFmtUsage() {
 	fmt.Println("Usage: mpu fmt [options] <file.s>")
 	fmt.Println()
 	fmt.Println("Formats assembly source code with consistent style.")
-	fmt.Println("Currently outputs to stdout - redirect to save formatted output.")
+	fmt.Println("By default outputs to stdout. Use -w to rewrite the file in place.")
 	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  -w         Rewrite file in place (not yet implemented)")
+	fmt.Println("  -w         Rewrite file in place")
 	fmt.Println("  --help     Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
@@ -228,9 +232,7 @@ func format(inputs []*os.File, rewrite bool) {
 		fmt.Fprintf(os.Stderr, "Usage: mpu fmt <file.s>\n")
 		os.Exit(1)
 	}
-	if rewrite {
-		fmt.Fprintf(os.Stderr, "Warning: -w flag is not yet implemented, outputting to stdout\n")
-	}
+
 	lexer := asm.NewLexer(inputs[0].Name(), inputs[0])
 	parser := asm.NewParser(asm.NewInput([]asm.TokenReader{lexer}))
 	parser.SetProcessInclude(false)
@@ -239,8 +241,40 @@ func format(inputs []*os.File, rewrite bool) {
 	if parser.HasErrors() {
 		os.Exit(1)
 	}
-	p := asm.NewPrinter(os.Stdout)
-	p.Print(parser.Statements())
+
+	if rewrite {
+		// Write to a temporary file first
+		tmpFile, err := ioutil.TempFile(filepath.Dir(inputs[0].Name()), ".mpu-fmt-*")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to create temporary file: %s\n", err)
+			os.Exit(1)
+		}
+		tmpName := tmpFile.Name()
+
+		// Format to the temporary file
+		p := asm.NewPrinter(tmpFile)
+		p.Print(parser.Statements())
+
+		// Close the temporary file
+		if err := tmpFile.Close(); err != nil {
+			os.Remove(tmpName)
+			fmt.Fprintf(os.Stderr, "Error: failed to write temporary file: %s\n", err)
+			os.Exit(1)
+		}
+
+		// Close the input file before overwriting
+		inputs[0].Close()
+
+		// Move the temporary file to the original file
+		if err := os.Rename(tmpName, inputs[0].Name()); err != nil {
+			os.Remove(tmpName)
+			fmt.Fprintf(os.Stderr, "Error: failed to write file: %s\n", err)
+			os.Exit(1)
+		}
+	} else {
+		p := asm.NewPrinter(os.Stdout)
+		p.Print(parser.Statements())
+	}
 }
 
 func getInputs(flagSet *flag.FlagSet) []*os.File {
@@ -272,7 +306,7 @@ func getInputs(flagSet *flag.FlagSet) []*os.File {
 
 // Run can be invoked with 1 file that doesn't end with .s, or a list
 // of files ending with .s
-func run(inputs []*os.File, monitor bool) {
+func run(inputs []*os.File, monitor bool, debug bool) {
 	bin := false
 	src := false
 	for _, f := range inputs {
@@ -295,9 +329,12 @@ func run(inputs []*os.File, monitor bool) {
 
 	var bytes []byte
 	var err error
+	var linker *asm.Linker
+	var files []string
+
 	setBaseDirFromInputFile(inputs[0].Name())
 	if src {
-		linker, _ := compile(inputs)
+		linker, files = compile(inputs)
 		bytes = linker.Code()
 	} else {
 		// run program
@@ -306,8 +343,30 @@ func run(inputs []*os.File, monitor bool) {
 			panic(err)
 		}
 	}
+
+	// Ensure code is at least 64KB
+	if len(bytes) < 65536 {
+		padded := make([]byte, 65536)
+		copy(padded, bytes)
+		bytes = padded
+	}
+
 	m := machine.NewMachine(bytes)
-	if monitor {
+	if debug && linker != nil {
+		// Use enhanced debugger
+		dbg := debugger.NewDebugger(m, linker.Symbols(), linker.DebugInfo())
+		ui := debugger.NewDebuggerUI(dbg)
+
+		// Load source files
+		sourceReader := test.NewSourceReader()
+		for _, file := range files {
+			if lines, err := sourceReader.ReadSourceFile(file); err == nil {
+				dbg.LoadSourceFile(file, lines)
+			}
+		}
+
+		ui.Run()
+	} else if monitor {
 		monitor := &Monitor{machine: m, memory: m.Memory()}
 		monitor.Run()
 	} else {

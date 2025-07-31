@@ -35,8 +35,6 @@
 //  Order of bits within CharacterTable are as follows (A is bit 0):
 //      U-T-S-R-P-N-M-K-H-G-F-E-D-C-B-A
 
-LIBLCD_IO_REQ      = 6
-
 tx:         dw 0                // Text next print x coordinate
 ty:         dw 0                // Text next print y coordinate
 
@@ -105,7 +103,7 @@ DrawCharacter(char word):
             cpy line_y2, ty
             add line_y2, *segptr
             add segptr, #2
-            cpy LIBLCD_IO_REQ, #line
+            req #line
 .next:
             div mask, #2        // shift right
             jne loop            // if result is zero there's nothing more to draw
@@ -113,7 +111,7 @@ DrawCharacter(char word):
             add tx, #LCD_CHAR_SPACE
             ret
 
-.line:       dw 0x0206
+.line:       dw 0x0206, 0
 .line_x:     dw 0
 .line_y:     dw 0
 .line_x2:    dw 0

@@ -110,7 +110,7 @@ func (e *TestExecutor) runTest(test TestInfo) TestResult {
 		defer func() {
 			if r := recover(); r != nil {
 				// Find the PC where the error occurred
-				pc := e.machine.Memory().GetWord(machine.PCAddr)
+				pc := e.machine.Pc
 				file, line := e.findSourceLocation(pc)
 
 				var msg string
@@ -184,9 +184,9 @@ func (e *TestExecutor) runTest(test TestInfo) TestResult {
 // resetMachineState resets the machine to a clean state for each test.
 func (e *TestExecutor) resetMachineState() {
 	// Reset SP to top of memory
-	e.machine.Memory().PutWord(machine.SPAddr, 0xFFFF)
+	e.machine.Sp = 0xFFFF
 	// Reset FP
-	e.machine.Memory().PutWord(machine.FPAddr, 0)
+	e.machine.Fp = 0
 	// Clear carry and other flags by executing CLC, CLB
 	// This is a simplified reset - might need more comprehensive reset later
 }
@@ -206,16 +206,16 @@ func (e *TestExecutor) callFunction(name string) error {
 // callAddress calls a function at the given address using JSR/RET convention.
 func (e *TestExecutor) callAddress(addr uint16) {
 	// Get current PC
-	pc := e.machine.Memory().GetWord(machine.PCAddr)
+	pc := e.machine.Pc
 
 	// Push return address (current PC + 3 for JSR instruction)
-	sp := e.machine.Memory().GetWord(machine.SPAddr)
+	sp := e.machine.Sp
 	sp -= 2
 	e.machine.Memory().PutWord(sp, pc+3)
-	e.machine.Memory().PutWord(machine.SPAddr, sp)
+	e.machine.Sp = sp
 
 	// Jump to test function
-	e.machine.Memory().PutWord(machine.PCAddr, addr)
+	e.machine.Pc = addr
 
 	// Run until RET
 	e.machine.Run()

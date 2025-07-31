@@ -1,17 +1,10 @@
 // Testing 12.4 fixed point math, with a print routine to debug.
-
             include "stdio.s"
             include "sqrt.s"
 
-            org 0
-            dw main
-
-            org 0x10
-
-
 main():
-    var a word
-    var b word
+            var a word
+            var b word
 
             psh #0
             cpy a, #0b0010_1000
@@ -32,7 +25,7 @@ printfp(value word):
             psh t1
             jsr PrintInteger
             pop #2
-            cpy 6, #ioPrintDec
+            req #ioPrintDec
 
             cpy fraction, #0
             cpy t1, value
@@ -42,7 +35,7 @@ printfp(value word):
 .b2:
             cpy t1, value
             and t1, #0b_0100
-            jeq b1            
+            jeq b1
             add fraction, #2500
 .b1:
             cpy t1, value
@@ -62,14 +55,14 @@ printfp(value word):
             psh #5
             jsr Itoa
             pop #6
-            cpy 6, #ioPrintFrac
+            req #ioPrintFrac
             ret
-.ioPrintDec:
-        dw 0x0101   // stdout putchars
-        dw dec        // pointer to zero terminated string
-.dec:    db '.', 0x00
+.ioPrintDec: dw 0x0101          // stdout putchars
+            dw 0                // errcode
+            dw dec              // pointer to zero terminated string
+.dec:       db '.',0x00
 
-.ioPrintFrac:
-        dw 0x0101   // stdout putchars
-        dw fracbuf       // pointer to zero terminated string
-.fracbuf: ds 5
+.ioPrintFrac: dw 0x0101         // stdout putchars
+            dw 0                // errcode
+            dw fracbuf          // pointer to zero terminated string
+.fracbuf:   ds 5

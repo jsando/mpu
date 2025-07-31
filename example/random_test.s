@@ -4,14 +4,8 @@
         include "stdio.s"
         include "strconv.s"
         include "random.s"
-        
-		dw main
 
-IOREQ   = 6
-IORES   = 8
-				
-        org 0x10
-main():
+loop:
         psh #0
         psh #100
         jsr Random
@@ -19,4 +13,5 @@ main():
         jsr PrintInteger
         pop #2
         jsr Println
+        jmp loop
         hlt

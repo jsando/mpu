@@ -82,6 +82,7 @@ const (
 	TokRst
 	TokHlt
 	TokSea
+	TokReq
 	TokFunction
 	TokInclude
 	TokVar
@@ -104,7 +105,7 @@ var tokenImage = []string{
 	"jlt", "inc", "dec", "jsr", "ret",
 	"clc", "sec", "clb", "seb", "jcc",
 	"jcs", "sav", "rst", "hlt", "sea",
-	"function()", "include", "var", "test",
+	"req", "function()", "include", "var", "test",
 	"<comment>", "<eol>",
 }
 

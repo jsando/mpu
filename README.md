@@ -2,17 +2,38 @@
 
 ## Overview
 
-MPU is a (virtual) 16 bit computer system, with a small enough instruction set to be easy to learn and play with but (hopefully) not so small that its just annoying.  At least, to someone used to assembly :) 
-
-It is named MPU because it has no general purpose registers ... all operations are directly on main memory, of which there is 64Kb.  It has a Program Counter, a Stack Pointer, and Frame Pointer located in memory at address 0, 2, and 4 respectively.  There are also flags such as the carry flag, zero flag, negative flag.  
+MPU is a (virtual) 16 bit computer system, with a small enough instruction set to be easy to learn, yet complete enough to be fun to work with.  It is named MPU because it has no general purpose registers ... all operations are directly on main memory, of which there is 64Kb.  It has a Program Counter, a Stack Pointer, and Frame Pointer.  There are also flags such as the carry flag, zero flag, negative flag.  
 
 Features:
 
 * 16 bit address space
 * Instructions can operate on bytes or words
-* Built in graphics, stdout, extensible hardware (could support network and file i/o easily)
-* Stack can be anywhere in memory and grows downward
+* Stack starts at 0xffff and grows down
 * Frame pointer makes it easy to write reusable/reentrant functions
+* Built in graphics and sound, extensible hardware
+
+Example:
+```asm
+   1: 0x0000  ---------- example/stdio_test.s ----------
+   1: 0x0000                       include "stdio.s"
+   2: 0x0000                       include "strconv.s"
+   3: 0x0000               
+   4: 0x0000               //---------------------------------------------------------
+   5: 0x0000               //  Print the numbers from 1 to 100 to the console.
+   6: 0x0000               //---------------------------------------------------------
+   7: 0x0000  ba02         main():
+   8: 0x0002                       var i word          // Declare variable 'i' as a word (on the stack)
+   9: 0x0002  67fe0100             cpy i, #1           // i = 1
+  10: 0x0006               .loop:
+  11: 0x0006  d0fe                 psh i               // push i on stack
+  12: 0x0008  eb1900               jsr PrintInteger    // print i
+  13: 0x000b  f102                 pop #2              // remove 2 bytes (i) from stack
+  14: 0x000d  eb3e00               jsr Println         // print newline
+  15: 0x0010  d2fe                 inc i               // i = i + 1
+  16: 0x0012  cefe6500             cmp i, #101         // i >= 100?
+  17: 0x0016  e8f0                 jlt loop            // jump if less than to 'loop'
+  18: 0x0018  00                   hlt                 // halt
+```
 
 MPU is also the name of a fictional US military satellite that became self-aware and decided to redraw giant animals on the face of the Earth using lasers to keep it company.
 
@@ -72,7 +93,7 @@ given a .s file it will assemble the file first and then run
 it.  This does not write to a .bin file, it runs directly from 
 memory.
 
-    -m      Load the program but start the system monitor, to 
+    -d      Load the program but start the debugger, to 
     allow to inspect memory and single-step.
 ```
 
@@ -117,12 +138,9 @@ mpu test -v example/test_*.s
 ## Format Source
 
 ```
-mpu fmt file
+mpu fmt [-w] file
 
-Parse and pretty-print the input file to stdout.  If I ever 
-get enough unit tests I'll add the flag to rewrite in place 
-but for now redirect to a new file, diff and make sure it 
-looks good, then rename or copy-paste.
+Parse and pretty-print the input file to stdout, or with -w rewrite original file. 
 
 ```
 # Examples
@@ -175,38 +193,30 @@ Press 'k' to drop fast.
 
 ### Programming Model
 
-Memory-mapped registers:
+Registers and flags:
 
-| Address   | 8 bits (lo)          | 8 bits (hi)          |
-|-----------|----------------------|----------------------|
-| 0x00      | Program Counter (lo) | Program Counter (hi) |
-| 0x02      | Stack Pointer (lo)   | Stack Pointer (hi)   |
-| 0x04      | Frame Pointer (lo)   | Frame Pointer (hi)   |
-| 0x06      | IO Request (lo)      | IO Request (hi)      |
-| 0x08      | IO Status (lo)       | IO Status (hi)       |
-| 0x0a      | Random (lo)          | Random (hi)          |
-| 0x0c-0x0f | Reserved             |                      |
-
-### Flags
-
-| Flag     | Power-On State | Usage                                                                 |
-|----------|----------------|-----------------------------------------------------------------------|
-| Zero     | Clear          | Set if last value written was zero, clear if not.                     |
-| Negative | Clear          | Set if last value written had its high bit set.                       |
-| Carry    | Clear          | Set / clear as used by add/sub.                                       |
-| Bytes    | Clear          | Bytes flag if set all instructions operate on bytes instead of words. |
+| Register             | Size (bits) | Purpose                                                              |
+|----------------------|-------------|----------------------------------------------------------------------|
+| Program Counter (PC) | 16          | Address of next instruction to execute.                              |
+| Stack Pointer (SP)   | 16          | Address of top of stack + 1                                          |
+| Frame Pointer (FP)   | 16          | Address within stack for fp-relative addressing                      |
+| Zero Flag            | 1           | Set if last value was zero, clear if not                             |
+| Negative Flag        | 1           | Set if last value had its high bit set                               |
+| Carry Flag           | 1           | Set / clear as used by add/sub                                       |
+| Bytes Flag           | 1           | If set, all instructions operate on bytes instead of words           |
+| Assertion Flag       | 1           | If set, next compare instruction will trigger assertion (unit tests) |
 
 ### Power On
 
-An image is loaded to address 0x0000 in memory.  The image is expected to set the Program Counter to the main function.  The stack pointer can be left at 0x0000, which will let it grown downward starting from 0xffff for the first value (or it can be set to any arbitrary address above 0x10).  Loading the initial image into RAM does not set the IO or RNG registers however.
+All registers and flags are zero on power-on.
 
-Once the image is loaded, execution begins at the address pointed to be the Program Counter.
+A program image is loaded to address 0x0000 in memory.  
+
+Once the image is loaded, execution begins at the address pointed to be the Program Counter, which is zero initially.
 
 Instructions are encoded in variable-length packets.  Opcodes are always 1 byte, and depending on the addressing mode are followed by zero to 4 additional bytes.
 
 There is no built-in firmware, operating system, interpreter, etc.  Program images for MPU are sort of like game catridges ... whatever is in there when you power it on, that's what you've got.  Programs can use the full 64Kb address space for code and data.
-
-Speaking of code and data, much like a 1980's era computer there is no separation.  Code is free to write data anywhere, or even output code dynamically and then invoke it.
 
 ## Byte vs Word Modes
 
@@ -228,36 +238,39 @@ Is effectively:
 
     a = a + b
 
-* Hlt - Halt processing.  If run from the command line this signals an exit.
-* Add - Add, with carry.  a += b
-* Sub - Subtract, with carry. a -= b
-* Mul - multiply. a *= b
-* Div - divide.  a /= b
-* And - bitwise and.  a &= b
-* Or - bitwise or.  a |= b
-* Xor - bitwise exclusive-or.  a ^= b
-* Cpy - copy. a = b
-* Cmp - Compare.  Its like sub but without storing the result, but it updates the flags.
-* Inc - Increment by 1.  Can use clc/add but this is shorter.
-* Dec - Decrement by 1.  Can use sec/sub but this is shorter.
-* Psh - Push operand on the stack.
-* Pop - Pop values off the stack.
-* Jsr - Jump to subroutine.  Pushes the return address on the stack, so ret/rst can return.
-* Jmp - Unconditional jump.  Like goto.  Operand is a 16 bit address.
-* Jeq - Jump if equal/zero.  Operand is 8 bit offset, max 127/-128.
-* Jne - Jump if not equal/not zero.  Operand is 8 bit offset, max 127/-128.
-* Jge - Jump if greater than or equal to.  Operand is 8 bit offset, max 127/-128.
-* Jlt - Jump if less than. Operand is 8 bit offset, max 127/-128.
-* Jcc - Jump if carry clear.  Operand is 8 bit offset, max 127/-128.
-* Jcs - Jump if carry set.  Operand is 8 bit offset, max 127/-128.
-* Sav - Save the framepointer, set it to the stack pointer, and allocate space for local vars (#bytes).
-* Seb - Set bytes mode flag.
-* Clb - Clear bytes mode flag.
-* Clc - Clear carry flag.
-* Sec - Set carry flag.
-* Sea - Set assertion flag (for unit tests - affects next CMP instruction).
-* Ret - Return from subroutine, using 16 bit address on top of stack.
-* Rst - Restore framepointer and return from subroutine.
+| Instruction | Description                | Example      | Notes                                                 |
+|-------------|----------------------------|--------------|-------------------------------------------------------|
+| **HLT**     | Halt processing            | hlt          |                                                       |
+| **ADD**     | Add with carry             | add op1, op2 | `op1 = op1 + op2`                                     |
+| **SUB**     | Subtract with carry        | sub op1, op2 | `op1 = op1 - op2`                                     |
+| **MUL**     | Multiply                   | mul op1, op2 | `op1 = op1 * op2`                                     |
+| **DIV**     | Divide                     | div op1, op2 | `op1 = op1 / op2`                                     |
+| **AND**     | Bitwise AND                | and op1, op2 | `op1 = op1 & op2`                                     |
+| **OR**      | Bitwise OR                 | or op1, op2  | `op1 = op1 \| op2`                                    |
+| **XOR**     | Bitwise exclusive-OR       | xor op1, op2 | `op1 = op1 ^ op2`                                     |
+| **CPY**     | Copy                       | cpy op1, op2 | `op1 = op2`                                           |
+| **CMP**     | Compare                    | cmp op1, op2 | `op1 - op2`                                           |
+| **INC**     | Increment by 1             | inc op1      | `op1 = op1 + 1`                                       |
+| **DEC**     | Decrement by 1             | dec op1      | `op1 = op1 - 1`                                       |
+| **PSH**     | Push operand on stack      | push op1     | Push op1 on stack                                     |
+| **POP**     | Pop values off stack       | pop op1      | Pop value off stack and store in op1 (or pop N bytes) |
+| **JSR**     | Jump to subroutine         | jsr label    | Pushes return address on stack for use by ret or rst  |
+| **JMP**     | Unconditional jump         | jmp label    | Operand is 16-bit address                             |
+| **JEQ**     | Jump if equal/zero         | jeq label    | Jump if zero flag set                                 |
+| **JNE**     | Jump if not equal/not zero | jne label    | Jump if zero flag clear                               |
+| **JGE**     | Jump if greater or equal   | jge label    | Jump if negative flag clear                           |
+| **JLT**     | Jump if less than          | jlt label    | Jump if negative flag set                             |
+| **JCC**     | Jump if carry clear        | jcc label    | Jump if carry clear                                   |
+| **JCS**     | Jump if carry set          | jcs label    | Jump if carry set                                     |
+| **SAV**     | Save frame pointer         | sav count    | Sets FP to SP and allocates count variable space      |
+| **SEB**     | Set bytes mode flag        | seb          | Switch to 8-bit mode                                  |
+| **CLB**     | Clear bytes mode flag      | clb          | Switch to 16-bit mode                                 |
+| **CLC**     | Clear carry flag           | clc          |                                                       |
+| **SEC**     | Set carry flag             | sec          |                                                       |
+| **SEA**     | Set assertion flag         | sea          | For unit tests - affects next CMP                     |
+| **RET**     | Return from subroutine     | ret          | Uses 16-bit address on stack                          |
+| **RST**     | Restore FP and return      | rst          | Restores frame pointer before returning               |
+| **REQ**     | Peripheral request         | req op1      | Request to external device (ex: graphics or sound)    |
 
 ## Address Modes
 
@@ -276,39 +289,43 @@ One of the ways the 6502 reduced the number of bytes of a program was by leverag
 
 ## Opcodes (left column is high nibble, top is low nibble)
 
-|       |     0     |     1     |     2     |     3     |     4     |    5     |     6     |     7     |    8     |     9     |     A     |     B     |    C     |    D     |     E     |     F     |
-|:-----:|:---------:|:---------:|:---------:|:---------:|:---------:|:--------:|:---------:|:---------:|:--------:|:---------:|:---------:|:---------:|:--------:|:--------:|:---------:|:---------:|
-| **0** |    hlt    |           |           |           |           |          |           |           |          |           |           |           |          |          |           |           |
-| **1** |  add a,a  |  sub a,a  |  mul a,a  |  div a,a  |  and a,a  |  or a,a  |  xor a,a  |  cpy a,a  | add a,#  |  sub a,#  |  mul a,#  |  div a,#  | and a,#  |  or a,#  |  xor a,#  |  cpy a,#  |
-| **2** |  add a,*  |  sub a,*  |  mul a,*  |  div a,*  |  and a,*  |  or a,*  |  xor a,*  |  cpy a,*  | add a,r  |  sub a,r  |  mul a,r  |  div a,r  | and a,r  |  or a,r  |  xor a,r  |  cpy a,r  |
-| **3** | add a,*r  | sub a,*r  | mul a,*r  | div a,*r  | and a,*r  | or a,*r  | xor a,*r  | cpy a,*r  | add *,a  |  sub *,a  |  mul *,a  |  div *,a  | and *,a  |  or *,a  |  xor *,a  |  cpy *,a  |
-| **4** |  add *,#  |  sub *,#  |  mul *,#  |  div *,#  |  and *,#  |  or *,#  |  xor *,#  |  cpy *,#  | add *,r  |  sub *,r  |  mul *,r  |  div *,r  | and *,r  |  or *,r  |  xor *,r  |  cpy *,r  |
-| **5** | add *,*r  | sub *,*r  | mul *,*r  | div *,*r  | and *,*r  | or *,*r  | xor *,*r  | cpy *,*r  | add r,a  |  sub r,a  |  mul r,a  |  div r,a  | and r,a  |  or r,a  |  xor r,a  |  cpy r,a  |
-| **6** |  add r,#  |  sub r,#  |  mul r,#  |  div r,#  |  and r,#  |  or r,#  |  xor r,#  |  cpy r,#  | add r,*  |  sub r,*  |  mul r,*  |  div r,*  | and r,*  |  or r,*  |  xor r,*  |  cpy r,*  |
-| **7** |  add r,r  |  sub r,r  |  mul r,r  |  div r,r  |  and r,r  |  or r,r  |  xor r,r  |  cpy r,r  | add r,*r | sub  r,*r | mul  r,*r | div  r,*r | and r,*r | or  r,*r | xor  r,*r | cpy  r,*r |
-| **8** | add *r,a  | sub *r,a  | mul *r,a  | div *r,a  | and *r,a  | or *r,a  | xor *r,a  | cpy *r,a  | add *r,# | sub *r,#  | mul *r,#  | div *r,#  | and *r,# | or *r,#  | xor *r,#  | cpy *r,#  |
-| **9** | add  *r,* | sub *r,*  | mul *r,*  | div *r,*  | and *r,*  | or *r,*  | xor *r,*  | cpy *r,*  | add *r,r | sub *r,r  | mul *r,r  | div *r,r  | and *r,r | or *r,r  | xor *r,r  | cpy *r,r  |
-| **A** | add *r,*r | sub *r,*r | mul *r,*r | div *r,*r | and *r,*r | or *r,*r | xor *r,*r | cpy *r,*r |          |           |           |           |          |          |           |           |
-| **B** |   psh a   |   pop a   |   inc a   |   dec a   |    sec    |   clc    |    seb    |    clb    |   ret    |    rst    |  sav #b   |           |          |          |           |           |
-| **C** |   psh *   |   pop *   |   inc *   |   dec *   |  cmp a,#  | cmp a,a  |  cmp a,*  |  cmp a,r  | cmp a,*r |  cmp *,#  |  cmp *,a  |  cmp *,*  | cmp *,r  | cmp *,*r |  cmp r,#  |  cmp r,a  |
-| **D** |   psh r   |   pop r   |   inc r   |   dec r   |  cmp r,*  | cmp r,r  | cmp r,*r  | cmp *r,#  | cmp *r,a | cmp *r,*  | cmp *r,r  | cmp *r,*r |          |          |           |           |
-| **E** |  psh *r   |  pop *r   |  inc *r   |  dec *r   |   jmp #   |  jeq ob  |  jne ob   |  jge ob   |  jlt ob  |  jcc ob   |  jcs ob   |   jsr #   |          |          |           |           |
-| **F** |   psh #   |  pop #b   |           |           |           |          |           |           |          |           |           |           |          |          |           |           |
+|       |     0      |     1     |     2     |     3     |     4     |    5     |     6     |     7     |    8     |     9     |     A     |     B     |    C     |     D      |     E     |     F     |
+|:-----:|:----------:|:---------:|:---------:|:---------:|:---------:|:--------:|:---------:|:---------:|:--------:|:---------:|:---------:|:---------:|:--------:|:----------:|:---------:|:---------:|
+| **0** |    hlt     |           |           |           |           |          |           |           |          |           |           |           |          |            |           |           |
+| **1** |  add a,a   |  sub a,a  |  mul a,a  |  div a,a  |  and a,a  |  or a,a  |  xor a,a  |  cpy a,a  | add a,#  |  sub a,#  |  mul a,#  |  div a,#  | and a,#  |   or a,#   |  xor a,#  |  cpy a,#  |
+| **2** |  add a,\*   |  sub a,\*  |  mul a,\*  |  div a,\*  |  and a,\*  |  or a,\*  |  xor a,\*  |  cpy a,\*  | add a,r  |  sub a,r  |  mul a,r  |  div a,r  | and a,r  |   or a,r   |  xor a,r  |  cpy a,r  |
+| **3** |  add a,\*r  | sub a,\*r  | mul a,\*r  | div a,\*r  | and a,\*r  | or a,\*r  | xor a,\*r  | cpy a,\*r  | add \*,a  |  sub \*,a  |  mul \*,a  |  div \*,a  | and \*,a  |   or \*,a   |  xor \*,a  |  cpy \*,a  |
+| **4** |  add \*,#   |  sub \*,#  |  mul \*,#  |  div \*,#  |  and \*,#  |  or \*,#  |  xor \*,#  |  cpy \*,#  | add \*,r  |  sub \*,r  |  mul \*,r  |  div \*,r  | and \*,r  |   or \*,r   |  xor \*,r  |  cpy \*,r  |
+| **5** |  add \*,\*r  | sub \*,\*r  | mul \*,\*r  | div \*,\*r  | and \*,\*r  | or \*,\*r  | xor \*,\*r  | cpy \*,\*r  | add r,a  |  sub r,a  |  mul r,a  |  div r,a  | and r,a  |   or r,a   |  xor r,a  |  cpy r,a  |
+| **6** |  add r,#   |  sub r,#  |  mul r,#  |  div r,#  |  and r,#  |  or r,#  |  xor r,#  |  cpy r,#  | add r,\*  |  sub r,\*  |  mul r,\*  |  div r,\*  | and r,\*  |   or r,\*   |  xor r,\*  |  cpy r,\*  |
+| **7** |  add r,r   |  sub r,r  |  mul r,r  |  div r,r  |  and r,r  |  or r,r  |  xor r,r  |  cpy r,r  | add r,\*r | sub  r,\*r | mul  r,\*r | div  r,\*r | and r,\*r |  or  r,\*r  | xor  r,\*r | cpy  r,\*r |
+| **8** |  add \*r,a  | sub \*r,a  | mul \*r,a  | div \*r,a  | and \*r,a  | or \*r,a  | xor \*r,a  | cpy \*r,a  | add \*r,# | sub \*r,#  | mul \*r,#  | div \*r,#  | and \*r,# |  or \*r,#   | xor \*r,#  | cpy \*r,#  |
+| **9** | add  \*r,\* | sub \*r,\* | mul \*r,\* | div \*r,\* | and \*r,\* | or \*r,\* | xor \*r,\* | cpy \*r,\* | add \*r,r | sub \*r,r  | mul \*r,r  | div \*r,r  | and \*r,r |  or \*r,r   | xor \*r,r  | cpy \*r,r  |
+| **A** | add \*r,\*r  | sub \*r,\*r | mul \*r,\*r | div \*r,\*r | and \*r,\*r | or \*r,\*r | xor \*r,\*r | cpy \*r,\*r |          |           |           |           |          |            |           |           |
+| **B** |   psh a    |   pop a   |   inc a   |   dec a   |    sec    |   clc    |    seb    |    clb    |   ret    |    rst    |  sav #b   |    sea    |  req #   |   req a    |   req r   |           |
+| **C** |   psh \*    |   pop \*   |   inc \*   |   dec \*   |  cmp a,#  | cmp a,a  |  cmp a,\*  |  cmp a,r  | cmp a,\*r |  cmp \*,#  |  cmp \*,a  | cmp \*,\* | cmp \*,r | cmp \*,\*r |  cmp r,#  |  cmp r,a  |
+| **D** |   psh r    |   pop r   |   inc r   |   dec r   |  cmp r,\*  | cmp r,r  | cmp r,\*r  | cmp \*r,#  | cmp \*r,a | cmp \*r,\* | cmp \*r,r  | cmp \*r,\*r |          |            |           |           |
+| **E** |   psh \*r   |  pop \*r   |  inc \*r   |  dec \*r   |   jmp #   |  jeq ob  |  jne ob   |  jge ob   |  jlt ob  |  jcc ob   |  jcs ob   |   jsr #   |          |            |           |           |
+| **F** |   psh #    |  pop #b   |           |           |           |          |           |           |          |           |           |           |          |            |           |           |
+
+Suppose you want to pop a word off the stack and store it to address 1234 (0x4d2 in hex), find "pop a" above which means pop with absolute address.  The opcode would be "B1" for the instruction, and it would be encoded followed by the address in little-endian format as follows:
+
+    b1 d2 04    // pop 0x04d2
 
 # Input/Output
 
-MPU can have awesome graphics adapters and other things attached easily using the Peripheral Management Interface (PMI).  The PMI is accessed from code by writing to address 0x06, and reading the status of a prior request from address 0x08.  The value written to the PMI request register at 0x06 must be a (16 bit) pointer to memory which contains the actual request.  All requests start with a 2-byte header that includes the device id and request number, followed by additional parameters depending on the type of request.
+MPU can interact with peripherals via its Peripheral Interface Adapter.  The PIA handles the request ("req") instruction by delegating to the proper PIA sub-controller, which reads memory as needed for the request via the PIA and MMU.  Basically the program sends messages to the PIA which works with the attached peripherals to service the message.
+
+![MPU Block Diagram](images/mpu-block-diagram-2.drawio.svg)
 
 Here is an example to write "Hello, world!" to standard output:
 
 ```
-                dw main          // Set initial PC to start at main
-                org 0x10
-main:
-                cpy 0x06,#myreq
+                req #myreq
                 hlt 
 
 myreq:          dw 0x0101       // stdout / putchars
+                dw 0            // space for error code
                 dw hello        // pointer to zero terminated string
 hello:          db "Hello, world!",0x0a,0x00
 
@@ -322,12 +339,13 @@ Write to stdout:
 
 ```
 Id       uint16 // 0x0101
+ErrCode  uint16 // returns non-zero on error
 PZString uint16 // pointer to zero-terminated string
 ```
 
 ## SDL Graphics & Sound
 
-This is a prototype to test out the PMI thingy and seems to be working pretty well, although I intended to do a retained-mode graphics interface because I figured that would be better for having only 64Kb.
+This is a prototype to test out the PIA thingy and seems to be working pretty well, although I intended to do a retained-mode graphics interface because I figured that would be better for having only 64Kb.
 
 To use the SDL hardware, see the sample program "example/graphics.s".  Basically the steps are:
 
@@ -344,10 +362,11 @@ SDL Initialize (Open Window):
 Create an SDL window, it will remain until the program terminates.
 
 ```
-Id     uint16 // 0x0201
-Width  uint16 // Window with in pixels
-Height uint16 // Window height in pixels
-Title  uint16 // Pointer to zstring
+Id       uint16 // 0x0201
+ErrCode  uint16 // returns non-zero on error
+Width    uint16 // Window with in pixels
+Height   uint16 // Window height in pixels
+Title    uint16 // Pointer to zstring
 ```
 
 Poll Events:
@@ -356,6 +375,7 @@ This must be called in a main loop to dequeue events like mouse movement, keyboa
 
 ```
 Id        uint16    // 0x0202
+ErrCode   uint16    // returns non-zero on error
 EventType uint16    // SDL event type if < 65536 (see https://wiki.libsdl.org/SDL_Event)
 Timestamp uint16    // Event timestamp as 1/4 second since SDL init
 Data      [4]uint16 // moar response (right now, just 16 bit KeyCode if its a keyevent)
@@ -365,6 +385,7 @@ Present:
 
 ```
 Id      uint16      // 0x0203
+ErrCode uint16      // returns non-zero on error
 DelayMS uint16      // Optional delay in milliseconds, 0-65535 (16 = 60fps approx)
 ```
 
@@ -373,7 +394,9 @@ Clear Screen:
 Clear the window to the current draw color.
 
 ```
-Id uint16           // 0x0204
+Id      uint16 // 0x0204
+ErrCode uint16 // returns non-zero on error
+
 ```
 
 Set Draw Color:
@@ -382,6 +405,7 @@ Sets the current drawing color, for subsequent clear, drawline, drawrect, or fil
 
 ```
 Id         uint16   // 0x0205
+ErrCode    uint16   // returns non-zero on error
 R, G, B, A uint8    // Red, Green, Blue, Alpha as values in range 0-255
 ```
 
@@ -389,6 +413,7 @@ Draw Line:
 
 ```
 Id             uint16   // 0x0206
+ErrCode        uint16   // returns non-zero on error
 X1, Y1, X2, Y2 uint16   // Draw line from (x1,y1) to (x2,y2)
 ```
 
@@ -398,6 +423,7 @@ Draw an emptyrectangle using lines in the current draw color.
 
 ```
 Id         uint16       // 0x0207 
+ErrCode    uint16       // returns non-zero on error
 X, Y, W, H uint16       // Draw a rectangle from (x,y) to (x+w-1,y+h-1)
 ```
 
@@ -407,6 +433,7 @@ Draw a colored rectangle in the current draw color.
 
 ```
 Id         uint16       // 0x0207 
+ErrCode    uint16       // returns non-zero on error
 X, Y, W, H uint16       // Draw a rectangle from (x,y) to (x+w-1,y+h-1)
 ```
 
@@ -415,8 +442,9 @@ Get Ticks:
 Get the number of seconds elapsed since SDL init was called.
 
 ```
-Id    uint16      // 0x0209
-Ticks uint16      // Return value
+Id      uint16      // 0x0209
+ErrCode uint16      // returns non-zero on error
+Ticks   uint16      // Return value
 ```
 
 Initialize SDL Audio:
@@ -424,7 +452,8 @@ Initialize SDL Audio:
 Must be called once before loading or playing any sound files.
 
 ```
-Id uint16   // 0x020a
+Id      uint16   // 0x020a
+ErrCode uint16   // returns non-zero on error
 ```
 
 Load WAV File:
@@ -432,8 +461,9 @@ Load WAV File:
 Load a WAV audio file in preparation to be played.  These are used as sound effects.
 
 ```
-Id   uint16 // 0x020b
-Path uint16 // Pointer to zero-terminated string, path to .wav file (relative to .bin/.s)
+Id      uint16 // 0x020b
+ErrCode uint16 // returns non-zero on error
+Path    uint16 // Pointer to zero-terminated string, path to .wav file (relative to .bin/.s)
 ```
 
 Play WAV File:
@@ -441,81 +471,18 @@ Play WAV File:
 Play the previously loaded WAV file of the same name.  Can be called numerous times on the same path.
 
 ```
-Id   uint16 // 0x020b
-Path uint16 // Pointer to zero-terminated string, path to .wav file (relative to .bin/.s)
+Id      uint16 // 0x020c
+ErrCode uint16 // returns non-zero on error
+Path    uint16 // Pointer to zero-terminated string, path to .wav file (relative to .bin/.s)
 ```
 
-# System Monitor
-
-The monitor is a most primitive type of way to step through a program and inspect memory.  Start a program in the monitor by launching with -m:
-
-```
-mpu run -m example/hello.s
-```
-
-Commands:
-
-* d/dump [start [end]]
-* l/list [start]
-* set [address value [value]*]
-* run address
-* s/step [address]
-
-Example:
-
-```
-> dump 0x0
-0000  00 01 00 00 00 00 00 00 00 00 48 94 00 00 00 00  |..........H.....|
-0010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0060  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0070  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0080  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0090  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-
-> list 0x100
-0x0100  ba 02          sav #0x02
-0x0102  67 fe 0a 00    cpy fp-2,#0x000a
-0x0106  1f 06 00 00 10 cpy 0x0006,#0x1000
-0x010b  d3 fe          dec fp-2
-0x010d  e6 f9          jne 0x0106 (-7)
-0x010f  00             hlt 
-0x0110  00             hlt 
-0x0111  00             hlt 
-0x0112  00             hlt 
-0x0113  00             hlt 
-0x0114  00             hlt 
-0x0115  00             hlt 
-0x0116  00             hlt 
-0x0117  00             hlt 
-0x0118  00             hlt 
-0x0119  00             hlt 
-0x011a  00             hlt 
-0x011b  00             hlt 
-0x011c  00             hlt 
-0x011d  00             hlt 
-
-> step 0x100
-0x0100  ba 02          sav #0x02
-[status pc=0102 sp=fffc fp=fffe n=0 z=0 c=0 b=0]
-> s
-0x0102  67 fe 0a 00    cpy fp-2,#0x000a
-[status pc=0106 sp=fffc fp=fffe n=0 z=0 c=0 b=0]
-> s
-0x0106  1f 06 00 00 10 cpy 0x0006,#0x1000
-Hello, world!
-
-```
 # Assembler
 
 The quickest way to learn the assembler syntax is to look as some of the examples.
 
 ## Symbols
 
-There are 4 types of symbols:
+There are four types of symbols:
 
 * Equates, which are constants
 * Labels, which are defined as the current value of the program counter
@@ -594,6 +561,23 @@ Itoa(value word, buffer word, bsize word):
     var t2 word
     ...    
 ```
+For each parameter the assembler needs to know the size (byte or word) so it can allocate 1 or 2 bytes.  In the example above, there are 3 word parameters passed in on the stack.  The stack also contains the return address.
+
+Frame pointer and stack pointer, and values for each local label:
+
+|        | Content             | Offset |
+|--------|---------------------|--------|
+|        | param 'value'       | fp+8   |
+|        | param 'buffer'      | fp+6   |
+|        | param 'bsize'       | fp+4   |
+|        | jsr return address  | fp+2   |
+| fp --> | saved frame pointer | fp+0   |
+|        | var 'next'          | fp-2   |
+|        | var 't1'            | fp-4   |
+| sp --> | var 't2'            | fp-6   |
+
+What all this does is mean instead of typing 'cpy fp-2,fp+4' you can write 'cpy next,bsize' and the assembler takes care of the offsets for you.
+
 
 ## Unit Tests
 
@@ -637,23 +621,6 @@ Failed assertions show the source code location and expected vs actual values:
   Expected: 10
   Actual: 5
 ```
-
-For each parameter the assembler needs to know the size (byte or word) so it can allocate 1 or 2 bytes.  In the example above, there are 3 word parameters passed in on the stack.  The stack also contains the return address.
-
-Frame pointer and stack pointer, and values for each local label:
-
-|        | Content             | Offset |
-|--------|---------------------|--------|
-|        | param 'value'       | fp+8   |
-|        | param 'buffer'      | fp+6   |
-|        | param 'bsize'       | fp+4   |
-|        | jsr return address  | fp+2   |
-| fp --> | saved frame pointer | fp+0   |
-|        | var 'next'          | fp-2   |
-|        | var 't1'            | fp-4   |
-| sp --> | var 't2'            | fp-6   |
-
-What all this does is mean instead of typing 'cpy fp-2,fp+4' you can write 'cpy next,bsize' and the assembler takes care of the offsets for you.
 
 ## Define space
 

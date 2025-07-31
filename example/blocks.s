@@ -13,148 +13,141 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
             include "random.s"
             include "lcd.s"
             include "stdio.s"
             include "strconv.s"
 
-            org 0
-            dw Main
+            jmp Main
 
-            org 0x10
-IO_REQUEST  = 6
-
-            org 0x10
 // Constants
-LCD_CHAR_WIDTH  = 16
-LCD_CHAR_SPACE  = 20
-LCD_LINE_SPACE  = 40
+LCD_CHAR_WIDTH = 16
+LCD_CHAR_SPACE = 20
+LCD_LINE_SPACE = 40
 
-SCREEN_WIDTH    = 800
-SCREEN_HEIGHT   = 600
-SDL_QUIT        = 0x100
-SDL_KEYDOWN     = 0x300
-SDL_KEYUP       = 0x301
-SDLK_ESCAPE     = 0x1b
-SDLK_SPACE      = 0x20
-SDLK_i          = 0x69
-SDLK_j          = 0x6a
-SDLK_k          = 0x6b
-SDLK_l          = 0x6c
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+SDL_QUIT    = 0x100
+SDL_KEYDOWN = 0x300
+SDL_KEYUP   = 0x301
+SDLK_ESCAPE = 0x1b
+SDLK_SPACE  = 0x20
+SDLK_i      = 0x69
+SDLK_j      = 0x6a
+SDLK_k      = 0x6b
+SDLK_l      = 0x6c
 
-PADDING         = 25
-BOARD_HEIGHT    = SCREEN_HEIGHT - 2*PADDING
-CELL_SIZE       = BOARD_HEIGHT /25
-BOARD_X         = (SCREEN_WIDTH / 2 - 6 * CELL_SIZE)
-BOARD_Y         = PADDING
-BOARD_WIDTH     = 12 * CELL_SIZE
-NEXT_X          = BOARD_X + BOARD_WIDTH
-NEXT_Y1         = PADDING + CELL_SIZE
-NEXT_Y2         = NEXT_Y1 + 4 * CELL_SIZE
-NEXT_Y3         = NEXT_Y2 + 4 * CELL_SIZE
-COORD_SCALE     = 64
+PADDING     = 25
+BOARD_HEIGHT = SCREEN_HEIGHT-2*PADDING
+CELL_SIZE   = BOARD_HEIGHT/25
+BOARD_X     = SCREEN_WIDTH/2-6*CELL_SIZE
+BOARD_Y     = PADDING
+BOARD_WIDTH = 12*CELL_SIZE
+NEXT_X      = BOARD_X+BOARD_WIDTH
+NEXT_Y1     = PADDING+CELL_SIZE
+NEXT_Y2     = NEXT_Y1+4*CELL_SIZE
+NEXT_Y3     = NEXT_Y2+4*CELL_SIZE
+COORD_SCALE = 64
 
 // Globals
-QuitFlag:       dw 0
+QuitFlag:   dw 0
 
 // Key Status Table
 // OnKeyDown/OnKeyUp scan this table of keys we are interested in.
 // Its a keycode, followed by a word for it to write 1 if down, 0 if not.
 // Table ends with an extra zero.
-KeyTable:       dw SDLK_ESCAPE
-KeyEscDown:     dw 0
-                dw SDLK_SPACE
-KeySpaceDown:   dw 0
-                dw SDLK_i
-KeyIDown:       dw 0
-                dw SDLK_j
-KeyJDown:       dw 0
-                dw SDLK_k
-KeyKDown:       dw 0
-                dw SDLK_l
-KeyLDown:       dw 0
-                dw 0    // end of list
+KeyTable:   dw SDLK_ESCAPE
+KeyEscDown: dw 0
+            dw SDLK_SPACE
+KeySpaceDown: dw 0
+            dw SDLK_i
+KeyIDown:   dw 0
+            dw SDLK_j
+KeyJDown:   dw 0
+            dw SDLK_k
+KeyKDown:   dw 0
+            dw SDLK_l
+KeyLDown:   dw 0
+            dw 0                // end of list
 
-// Common color commands ... copy these addresses to IO_REQUEST to set color
-ColorBlack:     dw 0x0205
-                db 0,0,0,255
-ColorBlue:      dw 0x0205
-                db 0,0,170,255
-ColorGreen:     dw 0x0205
-                db 0,170,0,255
-ColorCyan:      dw 0x0205
-                db 0,170,170,255                
-ColorRed:       dw 0x0205
-                db 170,0,0,255
-ColorPink:      dw 0x0205
-                db 170,0,170,255                            
-ColorOrange:    dw 0x0205
-                db 170,85,0,255
-ColorBlockGrey: dw 0x0205
-                db 170,170,170,255                
-ColorWhite:     dw 0x0205
-                db 255,255,255,255
-ColorGrey:      dw 0x0205
-                db 50,50,50,255
-ColorScoreBG:   dw 0x0205
-                db 0,0,50,255
-ColorBG:        dw 0x0205
-                db 0,0,80,255
-ColorScoreFG:   dw 0x0205
-                db 0,255,0,255
+// Common color commands
+ColorBlack: dw 0x0205,0
+            db 0,0,0,255
+ColorBlue:  dw 0x0205,0
+            db 0,0,170,255
+ColorGreen: dw 0x0205,0
+            db 0,170,0,255
+ColorCyan:  dw 0x0205,0
+            db 0,170,170,255
+ColorRed:   dw 0x0205,0
+            db 170,0,0,255
+ColorPink:  dw 0x0205,0
+            db 170,0,170,255
+ColorOrange: dw 0x0205,0
+            db 170,85,0,255
+ColorBlockGrey: dw 0x0205,0
+            db 170,170,170,255
+ColorWhite: dw 0x0205,0
+            db 255,255,255,255
+ColorGrey:  dw 0x0205,0
+            db 50,50,50,255
+ColorScoreBG: dw 0x0205,0
+            db 0,0,50,255
+ColorBG:    dw 0x0205,0
+            db 0,0,80,255
+ColorScoreFG: dw 0x0205,0
+            db 0,255,0,255
 
 // Table of block colors, indexed by piece # + 1.  These are pointers
 // to the IO commands to copy to IO_REQUEST to set that as the current
 // color.
-BlockColors:    dw ColorBlack
-                dw ColorBlue
-                dw ColorGreen
-                dw ColorCyan
-                dw ColorRed
-                dw ColorPink
-                dw ColorOrange
-                dw ColorBlockGrey
+BlockColors: dw ColorBlack
+            dw ColorBlue
+            dw ColorGreen
+            dw ColorCyan
+            dw ColorRed
+            dw ColorPink
+            dw ColorOrange
+            dw ColorBlockGrey
 
-Score:          dw 0            
-Lines:          dw 0
-Level:          dw 1
+Score:      dw 0
+Lines:      dw 0
+Level:      dw 1
 
-Piece:          dw 255          // Current piece number 0-6, 255 = game over
-PieceX:         dw 0            // Current piece board position 1-10 (0 and 11 are borders) * COORD_SCALE
-PieceY:         dw 0            // Current piece board position 0-23 (25 is border) * COORD_SCALE
-PieceDX:        dw 0            // Current piece delta to actual position (to animate smooth as it moves)
-Rotation:       dw 0            // Current piece rotation 0-3
+Piece:      dw 255              // Current piece number 0-6, 255 = game over
+PieceX:     dw 0                // Current piece board position 1-10 (0 and 11 are borders) * COORD_SCALE
+PieceY:     dw 0                // Current piece board position 0-23 (25 is border) * COORD_SCALE
+PieceDX:    dw 0                // Current piece delta to actual position (to animate smooth as it moves)
+Rotation:   dw 0                // Current piece rotation 0-3
 
-NextPiece1:     dw 0
-NextPiece2:     dw 0
-NextPiece3:     dw 0
+NextPiece1: dw 0
+NextPiece2: dw 0
+NextPiece3: dw 0
 
-SpaceWait:      dw 0
+SpaceWait:  dw 0
 
-OutroFlag:      dw 0            // if != 0, play the game over sequence
+OutroFlag:  dw 0                // if != 0, play the game over sequence
 
 // Game board ... 12x24 color # of each cell, but left/bottom/right are solid and not drawn
-GameBoard:      ds 12*25*2
+GameBoard:  ds 12*25*2
 
-GameOverX       = SCREEN_WIDTH / 2 - 4 * LCD_CHAR_SPACE
-GameOverY       = SCREEN_HEIGHT / 2
-GameOverMessage:    db "GAME OVER",0
+GameOverX   = SCREEN_WIDTH/2-4*LCD_CHAR_SPACE
+GameOverY   = SCREEN_HEIGHT/2
+GameOverMessage: db "GAME OVER",0
 
-WavDropBlock:   db "wav/shoot-01.wav",0
-WavLineScore:   db "wav/collect-point-00.wav",0
-WavLevelUp:     db "wav/achievement-01.wav",0
-WavGameOver:    db "wav/lose-00.wav",0
-WavNewGame:     db "wav/win-00.wav",0
+WavDropBlock: db "wav/shoot-01.wav",0
+WavLineScore: db "wav/collect-point-00.wav",0
+WavLevelUp: db "wav/achievement-01.wav",0
+WavGameOver: db "wav/lose-00.wav",0
+WavNewGame: db "wav/win-00.wav",0
 
-DebugHere:  dw 0x0101           // Quick way to trace execution by printing stuff :)
+DebugHere:  dw 0x0101,0         // Quick way to trace execution by printing stuff :)
             dw buffer
-.buffer:     db "here\n",0
+.buffer:    db "here\n",0
 
-LineScoreTable:
-            dw 0, 100, 200, 500, 2000
+LineScoreTable: dw 0,100,200,500,2000
 
-// BlockTable defines the block shapes using bitmasks, bit 0 is the top left 
+// BlockTable defines the block shapes using bitmasks, bit 0 is the top left
 // of a 4x4 grid, bit 1 is the second on the top, and so on.  It only uses
 // 14 bits because the bottom right 2 are not used by any shape.
 // Each row defines one block, with entries for rotation=0,1,2,3
@@ -169,20 +162,18 @@ LineScoreTable:
 // Decimal:
 //      1       2       4       8
 //      16      32      64      128
-//      256     512     1024    2048 
+//      256     512     1024    2048
 //      4096    8192
 //
-BlockTable:
-            dw 2+32+512+1024, 16+32+64+256, 1+2+32+512, 4+16+32+64
-            dw 2+32+256+512, 1+16+32+64, 2+4+32+512, 16+32+64+1024
-            dw 16+32+64+512, 2+32+64+512, 2+16+32+64, 2+16+32+512
-            dw 32+64+512+1024, 32+64+512+1024, 32+64+512+1024, 32+64+512+1024
-            dw 2+32+64+1024, 2+4+16+32, 2+32+64+1024, 2+4+16+32
-            dw 16+32+512+1024, 4+64+32+512, 16+32+512+1024, 4+64+32+512
-            dw 2+32+512+8192, 16+32+64+128, 2+32+512+8192, 16+32+64+128
+BlockTable: dw 2+32+512+1024,16+32+64+256,1+2+32+512,4+16+32+64
+            dw 2+32+256+512,1+16+32+64,2+4+32+512,16+32+64+1024
+            dw 16+32+64+512,2+32+64+512,2+16+32+64,2+16+32+512
+            dw 32+64+512+1024,32+64+512+1024,32+64+512+1024,32+64+512+1024
+            dw 2+32+64+1024,2+4+16+32,2+32+64+1024,2+4+16+32
+            dw 16+32+512+1024,4+64+32+512,16+32+512+1024,4+64+32+512
+            dw 2+32+512+8192,16+32+64+128,2+32+512+8192,16+32+64+128
 
-ResetBoard:
-            dw 1,0,0,0,0,0,0,0,0,0,0,1
+ResetBoard: dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,0,0,0,0,0,0,0,0,0,0,1
@@ -207,8 +198,7 @@ ResetBoard:
             dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,0,0,0,0,0,0,0,0,0,0,1
             dw 1,1,1,1,1,1,1,1,1,1,1,1
-ResetEnd:
-            dw 0
+ResetEnd:   dw 0
 
 Main():
             jsr InitScreen
@@ -221,32 +211,32 @@ Main():
             hlt
 
 InitScreen():
-            cpy IO_REQUEST, #init
-            cpy IO_REQUEST, #initAudio
+            req #init
+            req #initAudio
             cpy wavptr, #WavDropBlock
-            cpy IO_REQUEST, #loadWav
+            req #loadWav
             cpy wavptr, #WavLineScore
-            cpy IO_REQUEST, #loadWav
+            req #loadWav
             cpy wavptr, #WavLevelUp
-            cpy IO_REQUEST, #loadWav
+            req #loadWav
             cpy wavptr, #WavGameOver
-            cpy IO_REQUEST, #loadWav
+            req #loadWav
             cpy wavptr, #WavNewGame
-            cpy IO_REQUEST, #loadWav
+            req #loadWav
             ret
 
-.init:       dw 0x0201
+.init:      dw 0x0201,0
             dw SCREEN_WIDTH
             dw SCREEN_HEIGHT
             dw title
-.title:      db "MPU Blocks", 0
-.initAudio:  dw 0x020a
-.loadWav:    dw 0x020b
-.wavptr:     dw 0
+.title:     db "MPU Blocks",0
+.initAudio: dw 0x020a,0
+.loadWav:   dw 0x020b,0
+.wavptr:    dw 0
 
 PollEvents():
 .loop:
-            cpy IO_REQUEST, #poll
+            req #poll
             cmp poll_event, #SDL_QUIT
             jne isKeyDown
             cpy QuitFlag, #1
@@ -275,9 +265,9 @@ PollEvents():
 .exit:
             ret
 
-.poll:       dw 0x0202
-.poll_event:dw 0
-.poll_time:  dw 0
+.poll:      dw 0x0202,0
+.poll_event: dw 0
+.poll_time: dw 0
 .keycode:
 .poll_data: ds 8
 
@@ -317,13 +307,13 @@ OnKeyUp(keycode word):
 
 DrawScreen():
             // Clear the screen to black
-            cpy IO_REQUEST, #ColorBG
-            cpy IO_REQUEST, #clear
+            req #ColorBG
+            req #clear
 
-            cpy IO_REQUEST, #ColorBlack
-            cpy IO_REQUEST, #boardRect
-            cpy IO_REQUEST, #ColorWhite
-            cpy IO_REQUEST, #boardRect2
+            req #ColorBlack
+            req #boardRect
+            req #ColorWhite
+            req #boardRect2
 
             jsr DrawBoard
             jsr DrawScore
@@ -342,9 +332,9 @@ DrawScreen():
             cmp OutroFlag, #0
             jeq drawGameOver
             cpy OutroFlag, #0
-            cpy IO_REQUEST, #gameOverSound
+            req #gameOverSound
 .drawGameOver:
-            cpy IO_REQUEST, #ColorWhite
+            req #ColorWhite
             cpy tx, #GameOverX
             cpy ty, #GameOverY
             psh #GameOverMessage
@@ -354,34 +344,34 @@ DrawScreen():
             jne done
             jsr NewGame
 .done:
-            cpy IO_REQUEST, #present
+            req #present
             ret
 
             // device request to clear screen
-.clear:      dw 0x0204
+.clear:     dw 0x0204,0
 
             // device request to present backbuffer to screen
-.present:    dw 0x0203
+.present:   dw 0x0203,0
             dw 10               // delay ms
 
-.boardRect:  dw 0x0208
-            dw BOARD_X + CELL_SIZE / 2
-            dw BOARD_Y + CELL_SIZE / 2
-            dw BOARD_WIDTH - CELL_SIZE - 1
-            dw BOARD_HEIGHT - CELL_SIZE - 1
-.boardRect2:  dw 0x0207
-            dw BOARD_X + CELL_SIZE / 2
-            dw BOARD_Y + CELL_SIZE / 2
-            dw BOARD_WIDTH - CELL_SIZE - 1
-            dw BOARD_HEIGHT - CELL_SIZE - 1
-.gameOverSound:  dw 0x020c
+.boardRect: dw 0x0208,0
+            dw BOARD_X+CELL_SIZE/2
+            dw BOARD_Y+CELL_SIZE/2
+            dw BOARD_WIDTH-CELL_SIZE-1
+            dw BOARD_HEIGHT-CELL_SIZE-1
+.boardRect2: dw 0x0207,0
+            dw BOARD_X+CELL_SIZE/2
+            dw BOARD_Y+CELL_SIZE/2
+            dw BOARD_WIDTH-CELL_SIZE-1
+            dw BOARD_HEIGHT-CELL_SIZE-1
+.gameOverSound: dw 0x020c,0
             dw WavGameOver
 
 DrawScore():
             // Level   000000
-            cpy IO_REQUEST, #ColorScoreBG
-            cpy IO_REQUEST, #level_rect
-            cpy IO_REQUEST, #ColorWhite
+            req #ColorScoreBG
+            req #level_rect
+            req #ColorWhite
             cpy tx, #text_x
             cpy ty, #level_y
             psh #level_string
@@ -393,9 +383,9 @@ DrawScore():
             pop #2
 
             // Lines   000000
-            cpy IO_REQUEST, #ColorScoreBG
-            cpy IO_REQUEST, #lines_rect
-            cpy IO_REQUEST, #ColorWhite
+            req #ColorScoreBG
+            req #lines_rect
+            req #ColorWhite
             cpy tx, #text_x
             cpy ty, #lines_y
             psh #lines_string
@@ -407,9 +397,9 @@ DrawScore():
             pop #2
 
             // Score   000000
-            cpy IO_REQUEST, #ColorScoreBG
-            cpy IO_REQUEST, #score_rect
-            cpy IO_REQUEST, #ColorWhite
+            req #ColorScoreBG
+            req #score_rect
+            req #ColorWhite
             cpy tx, #text_x
             cpy ty, #score_y
             psh #score_string
@@ -422,33 +412,33 @@ DrawScore():
 
             ret
 
-.text_x      = 30
-.level_y     = 2 * (SCREEN_HEIGHT / 3)
-.lines_y     = level_y + LCD_LINE_SPACE + 5
-.score_y     = lines_y + LCD_LINE_SPACE + 5
+.text_x     = 30
+.level_y    = 2*SCREEN_HEIGHT/3
+.lines_y    = level_y+LCD_LINE_SPACE+5
+.score_y    = lines_y+LCD_LINE_SPACE+5
 
-.level_string:   db  "LEVEL ",0
-.lines_string:   db  "LINES ",0
-.score_string:   db  "SCORE ",0
+.level_string: db "LEVEL ",0
+.lines_string: db "LINES ",0
+.score_string: db "SCORE ",0
 
-.level_rect: dw 0x0208
-            dw text_x - 10
-            dw level_y - 3
-            dw 12 * LCD_CHAR_SPACE
+.level_rect: dw 0x0208,0
+            dw text_x-10
+            dw level_y-3
+            dw 12*LCD_CHAR_SPACE
             dw LCD_LINE_SPACE
-.lines_rect: dw 0x0208
-            dw text_x - 10
-            dw lines_y - 3
-            dw 12 * LCD_CHAR_SPACE
+.lines_rect: dw 0x0208,0
+            dw text_x-10
+            dw lines_y-3
+            dw 12*LCD_CHAR_SPACE
             dw LCD_LINE_SPACE
-.score_rect: dw 0x0208
-            dw text_x - 10
-            dw score_y - 3
-            dw 12 * LCD_CHAR_SPACE
+.score_rect: dw 0x0208,0
+            dw text_x-10
+            dw score_y-3
+            dw 12*LCD_CHAR_SPACE
             dw LCD_LINE_SPACE
 
 Draw5Digit(value word):
-            var t1  word
+            var t1 word
             var t2 word
             var divisor word
             var first word
@@ -468,11 +458,11 @@ Draw5Digit(value word):
             jeq fgColor
             cmp first, #0
             jne fgColor
-            cpy IO_REQUEST, #ColorGrey
+            req #ColorGrey
             jmp printChar
 .fgColor:
             cpy first, #1
-            cpy IO_REQUEST, #ColorScoreFG
+            req #ColorScoreFG
 .printChar:
             add t1, #0x10
             psh t1
@@ -510,7 +500,7 @@ DrawBoard():
             cpy fillY, y
 
             cpy boardPtr, j
-            mul boardPtr, #24           // 12 entries * 2 bytes per entry
+            mul boardPtr, #24   // 12 entries * 2 bytes per entry
             cpy t1, i
             mul t1, #2
             add boardPtr, t1
@@ -519,8 +509,9 @@ DrawBoard():
 
             mul color, #2
             add color, #BlockColors
-            cpy IO_REQUEST, *color
-            cpy IO_REQUEST, #fillRect
+            cpy color, *color
+            req color
+            req #fillRect
 
             // inner loop
             inc j
@@ -533,9 +524,9 @@ DrawBoard():
             jlt iLoop
             ret
 
-.fillRect:   dw 0x0208
-.fillX:      dw 0
-.fillY:      dw 0
+.fillRect:  dw 0x0208,0
+.fillX:     dw 0
+.fillY:     dw 0
             dw CELL_SIZE-2
             dw CELL_SIZE-2
 
@@ -544,7 +535,7 @@ NewGame():
             var to word
 
             cpy OutroFlag, #1
-            cpy IO_REQUEST, #newGameSound
+            req #newGameSound
 
             // Clear the game board
             cpy from, #ResetBoard
@@ -555,7 +546,7 @@ NewGame():
             add from, #2
             cmp from, #ResetEnd
             jlt initBoardLoop
-            
+
             cpy Score, #0
             cpy Piece, #255
             cpy Lines, #0
@@ -583,7 +574,7 @@ NewGame():
             pop NextPiece3
             ret
 
-.newGameSound:  dw 0x020c
+.newGameSound: dw 0x020c,0
             dw WavNewGame
 
 CreatePiece():
@@ -601,8 +592,8 @@ CreatePiece():
             pop NextPiece3
 
             cpy Rotation, #0
-            cpy PieceX, #(4*COORD_SCALE)
-            cpy PieceY, #(2*COORD_SCALE)
+            cpy PieceX, #4*COORD_SCALE
+            cpy PieceY, #2*COORD_SCALE
             cpy PieceDX, PieceX
 
             psh #0
@@ -762,7 +753,7 @@ StampyTown():
             var t1 word
             var ptr word
 
-            cpy IO_REQUEST, #dropSound
+            req #dropSound
 
             cpy bx, PieceX
             div bx, #COORD_SCALE
@@ -816,17 +807,17 @@ StampyTown():
             // todo bonus time
             ret
 
-.dropSound:  dw 0x020c
+.dropSound: dw 0x020c,0
             dw WavDropBlock
 
 CollapseRows():
-var by          word
-var total_line  word
-var i           word
-var j           word
-var k           word
-var ptr         word
-var t1          word
+            var by word
+            var total_line word
+            var i word
+            var j word
+            var k word
+            var ptr word
+            var t1 word
 
             cpy total_line, #0
             cpy by, PieceY
@@ -836,7 +827,7 @@ var t1          word
             cmp by, #24
             jeq updateScore
 
-            // count how many in a row are occupied            
+            // count how many in a row are occupied
             cpy ptr, by
 
             mul ptr, #24        // 12 across times 2 bytes/cell
@@ -846,7 +837,7 @@ var t1          word
 .countLoop:
             cmp *ptr, #0
             jeq nextRow
-            add ptr, #2          
+            add ptr, #2
             dec i
             jne countLoop
 
@@ -857,10 +848,10 @@ var t1          word
             add ptr, #2         // skip left column
             cpy t1, by
             dec t1
-            mul t1, #24        
+            mul t1, #24
             add t1, #GameBoard
-            add t1, #2       
-            cpy k, by           // loop from by to 2 step -1  
+            add t1, #2
+            cpy k, by           // loop from by to 2 step -1
 .collapseLoop:
             cpy i, #10
 .copyRow:
@@ -883,7 +874,7 @@ var t1          word
 .updateScore:
             cmp total_line, #1
             jlt noscore
-            cpy IO_REQUEST, #lineSound
+            req #lineSound
 .noscore:
             cpy ptr, total_line
             mul ptr, #2
@@ -895,13 +886,13 @@ var t1          word
             cmp Lines, t1
             jlt done
             inc Level
-            cpy IO_REQUEST, #levelUpSound
+            req #levelUpSound
 .done:
             ret
 
-.lineSound: dw 0x020c
+.lineSound: dw 0x020c,0
             dw WavLineScore
-.levelUpSound: dw 0x020c
+.levelUpSound: dw 0x020c,0
             dw WavLevelUp
 
 DrawPiece(x word, y word, piece word, rotation word):
@@ -915,7 +906,8 @@ DrawPiece(x word, y word, piece word, rotation word):
             inc ptr
             mul ptr, #2
             add ptr, #BlockColors
-            cpy IO_REQUEST, *ptr
+            cpy ptr, *ptr
+            req ptr
 
             // Lookup block mask
             cpy ptr, piece
@@ -935,7 +927,7 @@ DrawPiece(x word, y word, piece word, rotation word):
 
             cpy fillX, x
             cpy fillY, y
-            cpy IO_REQUEST, #fillRect
+            req #fillRect
 .row:
             cmp i, #4
             jeq horiz
@@ -957,9 +949,9 @@ DrawPiece(x word, y word, piece word, rotation word):
 .done:
             ret
 
-.fillRect:   dw 0x0208
-.fillX:      dw 0
-.fillY:      dw 0
+.fillRect:  dw 0x0208,0
+.fillX:     dw 0
+.fillY:     dw 0
             dw CELL_SIZE-2
             dw CELL_SIZE-2
 
@@ -1015,7 +1007,7 @@ DrawPieces():
             mul t1, #CELL_SIZE
             div t1, #COORD_SCALE
             add t1, #BOARD_Y
-            sub t1, #CELL_SIZE - 1
+            sub t1, #CELL_SIZE-1
             psh t1
             psh Piece
             psh Rotation

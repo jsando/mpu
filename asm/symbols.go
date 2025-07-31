@@ -35,8 +35,16 @@ func (s *Symbol) Value() int {
 	return s.value
 }
 
+func (s *Symbol) IsFP() bool {
+	return s.fp
+}
+
 func (s *SymbolTable) GetSymbol(text string) *Symbol {
 	return s.symbols[text]
+}
+
+func (s *SymbolTable) Symbols() map[string]*Symbol {
+	return s.symbols
 }
 
 func (s *SymbolTable) AddSymbol(file string, line int, text string) {

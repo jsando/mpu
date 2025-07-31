@@ -26,17 +26,8 @@
             include "lcd.s"
             include "strconv.s"
 
-                // The initial program counter needs to point to the entry point at startup.
-                // The rest of the special mem area ($00-$0f) can be left zero on startup.
-            org 0
-REG_PC:     dw main
-REG_SP:     dw 0
-REG_FP:     dw 0
-REG_IO_REQ: dw 0
-REG_IO_RES: dw 0
-REG_RAND:   dw 0
+            jmp main
 
-            org 0x10
 // Constants
 LCD_CHAR_WIDTH  = 20
 LCD_CHAR_SPACE  = 24
@@ -110,10 +101,10 @@ main():
 // Initialize the display.
 //
 InitScreen():
-            cpy REG_IO_REQ, #init
+            req #init
             ret
 
-.init:       dw 0x0201
+.init:       dw 0x0201, 0
             dw SCREEN_WIDTH
             dw SCREEN_HEIGHT
             dw title
@@ -124,7 +115,7 @@ InitScreen():
 //
 PollEvents():
 .loop:
-            cpy REG_IO_REQ, #poll
+            req #poll
             cmp poll_event, #SDL_QUIT
             jne isKeyDown
             cpy quit, #1
@@ -149,7 +140,7 @@ PollEvents():
 .exit:
             ret
 
-.poll:       dw 0x0202           // graphics, poll
+.poll:       dw 0x0202, 0           // graphics, poll
 .poll_event: dw 0                // space for response event type id
 .poll_time:  dw 0                // space for response event timestamp (1/4 second since init)
 .keycode:
@@ -240,11 +231,11 @@ NewGame():
 //
 DrawScreen():
             // Clear the screen to black
-            cpy REG_IO_REQ, #color
-            cpy REG_IO_REQ, #clear
+            req #color
+            req #clear
 
-            cpy REG_IO_REQ, #white
-            cpy REG_IO_REQ, #line
+            req #white
+            req #line
 
             jsr DrawPlayer1Paddle
             jsr DrawPlayer2Paddle
@@ -273,25 +264,25 @@ DrawScreen():
 
             // Present what we've drawn and pause 16ms
 .done:
-            cpy REG_IO_REQ, #present
+            req #present
             ret
 
             // device request to set color
-.color:      dw 0x0205
+.color:      dw 0x0205, 0
 .color_r:    db 0
 .color_g:    db 0
 .color_b:    db 0
 .color_a:    db 255
 
             // device request to clear screen
-.clear:      dw 0x0204
+.clear:      dw 0x0204, 0
 
             // device request to present backbuffer to screen
-.present:    dw 0x0203
+.present:    dw 0x0203, 0
             dw 10               // delay ms
-.white:      dw 0x0205
+.white:      dw 0x0205, 0
             db 255,255,255,255
-.line:       dw 0x0206
+.line:       dw 0x0206, 0
             dw SCREEN_WIDTH / 2
             dw 0
             dw SCREEN_WIDTH / 2
@@ -302,14 +293,14 @@ DrawScreen():
 //
 DrawPlayer1Paddle():
             // Set draw color to white
-            cpy REG_IO_REQ, #color
+            req #color
 
             // Draw the paddle as a filled rectange
             cpy rect_x, player1_paddle_x
             cpy rect_y, player1_paddle_y
             cpy rect_w, player1_paddle_w
             cpy rect_h, player1_paddle_h
-            cpy REG_IO_REQ, #rect
+            req #rect
 
             // Check the up/down flags, move if set (but keep on screen)
             cmp player1_paddle_up, #0
@@ -331,11 +322,11 @@ DrawPlayer1Paddle():
             ret
 
             // device request to set color
-.color:      dw 0x0205
+.color:      dw 0x0205, 0
             db 255,255,255,255
 
             // device request to fill rectangle
-.rect:       dw 0x0208
+.rect:       dw 0x0208, 0
 .rect_x:     dw 0
 .rect_y:     dw 0
 .rect_w:     dw 0
@@ -346,14 +337,14 @@ DrawPlayer1Paddle():
 //
 DrawPlayer2Paddle():
             // Set draw color to white
-            cpy REG_IO_REQ, #color
+            req #color
 
             // Draw the paddle as a filled rectange
             cpy rect_x, player2_paddle_x
             cpy rect_y, player2_paddle_y
             cpy rect_w, player2_paddle_w
             cpy rect_h, player2_paddle_h
-            cpy REG_IO_REQ, #rect
+            req #rect
 
             // Check the up/down flags, move if set (but keep on screen)
             cmp player2_paddle_up, #0
@@ -375,11 +366,11 @@ DrawPlayer2Paddle():
             ret
 
             // device request to set color
-.color:      dw 0x0205
+.color:      dw 0x0205, 0
             db 255,255,255,255
 
             // device request to fill rectangle
-.rect:       dw 0x0208
+.rect:       dw 0x0208, 0
 .rect_x:     dw 0
 .rect_y:     dw 0
 .rect_w:     dw 0
@@ -429,14 +420,14 @@ InitBall():
 DrawBall():
     var trash word
             // Set draw color to white
-            cpy REG_IO_REQ, #color
+            req #color
 
             // Draw the ball as a filled rectange
             cpy rect_x, ball_x
             cpy rect_y, ball_y
             cpy rect_w, #BALL_RADIUS
             cpy rect_h, #BALL_RADIUS
-            cpy REG_IO_REQ, #rect
+            req #rect
 
             // Bounce if hit top or bottom
             cmp ball_y, #0
@@ -477,11 +468,11 @@ DrawBall():
             ret
 
             // device request to set color
-.color:      dw 0x0205
+.color:      dw 0x0205, 0
             db 255,255,255,255
 
             // device request to fill rectangle
-.rect:       dw 0x0208
+.rect:       dw 0x0208, 0
 .rect_x:     dw 100
 .rect_y:     dw 100
 .rect_w:     dw 50

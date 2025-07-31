@@ -1,10 +1,4 @@
-    dw main
 
-    org 0x20
-s1: db "hello",0
-s2: ds 20
-
-    org 0x100    
 main():
     var p1 word
     var p2 word
@@ -22,3 +16,6 @@ main():
 .done:
     clb
     hlt
+
+s1: db "hello",0
+s2: ds 20

@@ -16,16 +16,6 @@ package machine
 
 import (
 	"fmt"
-	"time"
-)
-
-const (
-	PCAddr     = 0  // Program counter
-	SPAddr     = 2  // Stack pointer, points to last byte written
-	FPAddr     = 4  // Frame pointer
-	IOReqAddr  = 6  // Address of I/O commands are written here to execute
-	IOStatAddr = 8  // I/O status of last command, 0 = success, != 0 error
-	RandAddr   = 10 // Writes are ignored, reads return random uint8/uint16
 )
 
 // BaseDirEnv is the key for an environment variable to use for loading relative files.
@@ -41,10 +31,11 @@ type AssertionFailure struct {
 // Machine implements MPU ... memory processing unit.
 // It supports 27 instructions and 6 addressing modes.
 type Machine struct {
-	memory         Memory            // 64kb of memory + dma overlay
-	pc             uint16            // program counter ... shadowed on read/write to address $0
-	sp             uint16            // stack pointer ... shadowed on read/write to address $2
-	fp             uint16            // frame pointer ... shadowed on read/write to address $4
+	memory         Memory            // 64kb of memory
+	dispatcher     *IODispatcher     // IO dispatcher for device requests
+	Pc             uint16            // program counter
+	Sp             uint16            // stack pointer
+	Fp             uint16            // frame pointer
 	negative       bool              // Negative flag, set true if last value had the high bit set.
 	zero           bool              // Zero flag, set true if last value had zero value.
 	carry          bool              // Carry flag
@@ -57,30 +48,15 @@ type Machine struct {
 }
 
 func NewMachineWithDevices(d *IODispatcher, image []byte) *Machine {
-	// Hoist up initial register values from raw image, if provided.
-	// This could be moved into the ByteSliceMemory constructor, except
-	// not all Memory objects support this ... writes to the IODispatcher
-	// will trigger an IO request.
+	// Initialize machine with default register values
 	m := &Machine{
-		pc: readOrDefault(image, PCAddr, 0x100),
-		sp: readOrDefault(image, SPAddr, 0xffff),
-		fp: readOrDefault(image, FPAddr, 0),
+		dispatcher: d,
+		Pc:         0,      // Programs start at address 0
+		Sp:         0xffff, // Stack starts at top of memory
+		Fp:         0,      // Frame pointer starts at 0
 	}
-	var unused1 uint16
-	var unused2 uint16
-	memory := NewByteSliceMemory(
-		[]Memory{
-			&Register{value: &m.pc},
-			&Register{value: &m.sp},
-			&Register{value: &m.fp},
-			d,
-			d.StatusRegister(),
-			NewRNG(time.Now().Unix()),
-			&Register{&unused1}, // Currently, 2 unused registers
-			&Register{&unused2},
-		},
-		image,
-	)
+	// Create simple byte slice memory without any mapped registers
+	memory := NewByteSliceMemory(nil, image)
 	m.memory = memory
 	d.memory = memory
 	return m
@@ -97,7 +73,7 @@ func (m *Machine) Memory() Memory {
 
 func (m *Machine) Run() {
 	for {
-		in := m.memory.GetByte(m.pc)
+		in := m.memory.GetByte(m.Pc)
 		var n uint16      // Number of bytes for each operand
 		var bytes uint16  // Total count of operand bytes (to skip pc to next instruction)
 		var target uint16 // the address being updated, ie often the address of value1
@@ -110,14 +86,14 @@ func (m *Machine) Run() {
 			return
 		}
 		if m1 != Implied {
-			target, value1, n = m.fetchOperand(m1, m.pc+1)
+			target, value1, n = m.fetchOperand(m1, m.Pc+1)
 			bytes = n
 		}
 		if m2 != Implied {
-			_, value2, n = m.fetchOperand(m2, m.pc+1+bytes)
+			_, value2, n = m.fetchOperand(m2, m.Pc+1+bytes)
 			bytes += n
 		}
-		m.pc = m.pc + uint16(bytes) + 1
+		m.Pc = m.Pc + uint16(bytes) + 1
 
 		switch opCode {
 		case Add: // todo carry
@@ -137,7 +113,7 @@ func (m *Machine) Run() {
 					m.assertionFails++
 					// Record failure details - PC points to next instruction, so subtract bytes+1
 					m.lastFailure = &AssertionFailure{
-						PC:       m.pc - uint16(bytes) - 1,
+						PC:       m.Pc - uint16(bytes) - 1,
 						Expected: value2,
 						Actual:   value1,
 					}
@@ -157,63 +133,63 @@ func (m *Machine) Run() {
 			m.writeTarget(target, value1-1)
 		case Psh:
 			if m.bytes {
-				m.sp -= 1
+				m.Sp -= 1
 			} else {
-				m.sp -= 2
+				m.Sp -= 2
 			}
-			m.writeTarget(m.sp, value1)
+			m.writeTarget(m.Sp, value1)
 		case Pop:
 			if m1 == ImmediateByte {
-				m.sp += uint16(value1)
+				m.Sp += uint16(value1)
 			} else {
-				m.writeTarget(target, int(m.memory.GetWord(m.sp)))
+				m.writeTarget(target, int(m.memory.GetWord(m.Sp)))
 				if m.bytes {
-					m.sp += 1
+					m.Sp += 1
 				} else {
-					m.sp += 2
+					m.Sp += 2
 				}
 			}
 		case Jmp:
-			m.pc = uint16(value1)
+			m.Pc = uint16(value1)
 		case Jeq:
 			if m.zero {
-				m.pc = uint16(value1)
+				m.Pc = uint16(value1)
 			}
 		case Jne:
 			if !m.zero {
-				m.pc = uint16(value1)
+				m.Pc = uint16(value1)
 			}
 		case Jge:
 			if !m.negative {
-				m.pc = uint16(value1)
+				m.Pc = uint16(value1)
 			}
 		case Jlt:
 			if m.negative {
-				m.pc = uint16(value1)
+				m.Pc = uint16(value1)
 			}
 		case Jcs:
 			if m.carry {
-				m.pc = uint16(value1)
+				m.Pc = uint16(value1)
 			}
 		case Jcc:
 			if !m.carry {
-				m.pc = uint16(value1)
+				m.Pc = uint16(value1)
 			}
 		case Jsr:
-			m.pushUint16(m.pc)
-			m.pc = uint16(value1)
+			m.pushUint16(m.Pc)
+			m.Pc = uint16(value1)
 		case Ret:
-			m.pc = m.popUint16()
+			m.Pc = m.popUint16()
 		case Sav:
 			// push frame pointer, copy sp->fp, adjust stack for locals
-			m.pushUint16(m.fp)
-			m.fp = m.sp
-			m.sp -= uint16(value1)
+			m.pushUint16(m.Fp)
+			m.Fp = m.Sp
+			m.Sp -= uint16(value1)
 		case Rst:
 			// discard locals from stack, restore fp, ret
-			m.sp = m.fp
-			m.fp = m.popUint16()
-			m.pc = m.popUint16()
+			m.Sp = m.Fp
+			m.Fp = m.popUint16()
+			m.Pc = m.popUint16()
 		case Seb:
 			m.bytes = true
 		case Clb:
@@ -224,6 +200,11 @@ func (m *Machine) Run() {
 			m.carry = false
 		case Sea:
 			m.assertion = true
+		case Req:
+			// Execute request.  The operand is the address of the request structure.
+			if m.dispatcher != nil {
+				m.dispatcher.execIORequest(uint16(value1))
+			}
 		}
 
 		if m.step {
@@ -262,24 +243,24 @@ func (m *Machine) updateFlagsWord(value int) {
 }
 
 func (m *Machine) pushWord(value int) {
-	m.sp -= 2
-	m.writeTarget(m.sp, value)
+	m.Sp -= 2
+	m.writeTarget(m.Sp, value)
 }
 
 func (m *Machine) popWord() int {
-	word := m.memory.GetWord(m.sp)
-	m.sp += 2
+	word := m.memory.GetWord(m.Sp)
+	m.Sp += 2
 	return int(word)
 }
 
 func (m *Machine) pushUint16(w uint16) {
-	m.sp -= 2
-	m.memory.PutWord(m.sp, w)
+	m.Sp -= 2
+	m.memory.PutWord(m.Sp, w)
 }
 
 func (m *Machine) popUint16() uint16 {
-	val := m.memory.GetWord(m.sp)
-	m.sp += 2
+	val := m.memory.GetWord(m.Sp)
+	m.Sp += 2
 	return val
 }
 
@@ -309,10 +290,10 @@ func (m *Machine) fetchOperand(mode AddressMode, pc uint16) (address uint16, val
 		address = m.memory.GetWord(m.memory.GetWord((pc)))
 		bytes = 2
 	case Relative:
-		address = uint16(m.ReadInt8(pc) + int(m.fp))
+		address = uint16(m.ReadInt8(pc) + int(m.Fp))
 		bytes = 1
 	case RelativeIndirect:
-		address = m.memory.GetWord(uint16((m.ReadInt8(pc) + int(m.fp))))
+		address = m.memory.GetWord(uint16((m.ReadInt8(pc) + int(m.Fp))))
 		bytes = 1
 	default:
 		panic(fmt.Sprintf("illegal address mode: %d", mode))
@@ -328,16 +309,16 @@ func (m *Machine) fetchOperand(mode AddressMode, pc uint16) (address uint16, val
 // RunAt runs code from the given program counter until a HLT is encountered.
 func (m *Machine) RunAt(pc uint16) {
 	m.step = false
-	m.pc = pc
+	m.Pc = pc
 	m.Run()
 }
 
 // Step executes a single instruction at the given address, and returns the new PC address.
 func (m *Machine) Step(addr uint16) uint16 {
 	m.step = true
-	m.pc = addr
+	m.Pc = addr
 	m.Run()
-	return m.pc
+	return m.Pc
 }
 
 type Flags struct {
@@ -368,9 +349,9 @@ func (m *Machine) LastAssertionFailure() *AssertionFailure {
 // Flags returns a snapshot of the current state of the registers and flags.
 func (m *Machine) Flags() Flags {
 	return Flags{
-		PC:       m.pc,
-		SP:       m.sp,
-		FP:       m.fp,
+		PC:       m.Pc,
+		SP:       m.Sp,
+		FP:       m.Fp,
 		Negative: m.negative,
 		Zero:     m.zero,
 		Carry:    m.carry,
