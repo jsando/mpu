@@ -93,7 +93,7 @@ given a .s file it will assemble the file first and then run
 it.  This does not write to a .bin file, it runs directly from 
 memory.
 
-    -m      Load the program but start the system monitor, to 
+    -d      Load the program but start the debugger, to 
     allow to inspect memory and single-step.
 ```
 
@@ -345,7 +345,7 @@ PZString uint16 // pointer to zero-terminated string
 
 ## SDL Graphics & Sound
 
-This is a prototype to test out the PMI thingy and seems to be working pretty well, although I intended to do a retained-mode graphics interface because I figured that would be better for having only 64Kb.
+This is a prototype to test out the PIA thingy and seems to be working pretty well, although I intended to do a retained-mode graphics interface because I figured that would be better for having only 64Kb.
 
 To use the SDL hardware, see the sample program "example/graphics.s".  Basically the steps are:
 
@@ -476,70 +476,6 @@ ErrCode uint16 // returns non-zero on error
 Path    uint16 // Pointer to zero-terminated string, path to .wav file (relative to .bin/.s)
 ```
 
-# System Monitor
-
-The monitor is a most primitive type of way to step through a program and inspect memory.  Start a program in the monitor by launching with -m:
-
-```
-mpu run -m example/hello.s
-```
-
-Commands:
-
-* d/dump [start [end]]
-* l/list [start]
-* set [address value [value]*]
-* run address
-* s/step [address]
-
-Example:
-
-```
-> dump 0x0
-0000  00 01 00 00 00 00 00 00 00 00 48 94 00 00 00 00  |..........H.....|
-0010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0060  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0070  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0080  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-0090  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
-
-> list 0x100
-0x0100  ba 02          sav #0x02
-0x0102  67 fe 0a 00    cpy fp-2,#0x000a
-0x0106  1f 06 00 00 10 cpy 0x0006,#0x1000
-0x010b  d3 fe          dec fp-2
-0x010d  e6 f9          jne 0x0106 (-7)
-0x010f  00             hlt 
-0x0110  00             hlt 
-0x0111  00             hlt 
-0x0112  00             hlt 
-0x0113  00             hlt 
-0x0114  00             hlt 
-0x0115  00             hlt 
-0x0116  00             hlt 
-0x0117  00             hlt 
-0x0118  00             hlt 
-0x0119  00             hlt 
-0x011a  00             hlt 
-0x011b  00             hlt 
-0x011c  00             hlt 
-0x011d  00             hlt 
-
-> step 0x100
-0x0100  ba 02          sav #0x02
-[status pc=0102 sp=fffc fp=fffe n=0 z=0 c=0 b=0]
-> s
-0x0102  67 fe 0a 00    cpy fp-2,#0x000a
-[status pc=0106 sp=fffc fp=fffe n=0 z=0 c=0 b=0]
-> s
-0x0106  1f 06 00 00 10 cpy 0x0006,#0x1000
-Hello, world!
-
-```
 # Assembler
 
 The quickest way to learn the assembler syntax is to look as some of the examples.
@@ -625,6 +561,23 @@ Itoa(value word, buffer word, bsize word):
     var t2 word
     ...    
 ```
+For each parameter the assembler needs to know the size (byte or word) so it can allocate 1 or 2 bytes.  In the example above, there are 3 word parameters passed in on the stack.  The stack also contains the return address.
+
+Frame pointer and stack pointer, and values for each local label:
+
+|        | Content             | Offset |
+|--------|---------------------|--------|
+|        | param 'value'       | fp+8   |
+|        | param 'buffer'      | fp+6   |
+|        | param 'bsize'       | fp+4   |
+|        | jsr return address  | fp+2   |
+| fp --> | saved frame pointer | fp+0   |
+|        | var 'next'          | fp-2   |
+|        | var 't1'            | fp-4   |
+| sp --> | var 't2'            | fp-6   |
+
+What all this does is mean instead of typing 'cpy fp-2,fp+4' you can write 'cpy next,bsize' and the assembler takes care of the offsets for you.
+
 
 ## Unit Tests
 
@@ -668,23 +621,6 @@ Failed assertions show the source code location and expected vs actual values:
   Expected: 10
   Actual: 5
 ```
-
-For each parameter the assembler needs to know the size (byte or word) so it can allocate 1 or 2 bytes.  In the example above, there are 3 word parameters passed in on the stack.  The stack also contains the return address.
-
-Frame pointer and stack pointer, and values for each local label:
-
-|        | Content             | Offset |
-|--------|---------------------|--------|
-|        | param 'value'       | fp+8   |
-|        | param 'buffer'      | fp+6   |
-|        | param 'bsize'       | fp+4   |
-|        | jsr return address  | fp+2   |
-| fp --> | saved frame pointer | fp+0   |
-|        | var 'next'          | fp-2   |
-|        | var 't1'            | fp-4   |
-| sp --> | var 't2'            | fp-6   |
-
-What all this does is mean instead of typing 'cpy fp-2,fp+4' you can write 'cpy next,bsize' and the assembler takes care of the offsets for you.
 
 ## Define space
 
