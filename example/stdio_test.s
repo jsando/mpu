@@ -13,6 +13,6 @@ main():
         pop #2              // remove 2 bytes (i) from stack
         jsr Println         // print newline
         inc i               // i = i + 1
-        cmp i, #101         // i >= 100?
+        cmp i, #101         // i >= 101?
         jlt loop            // jump if less than to 'loop'
         hlt                 // halt

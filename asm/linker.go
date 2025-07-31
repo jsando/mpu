@@ -314,6 +314,8 @@ func (l *Linker) doFunction(fn *FunctionStatement) {
 		l.symbols.AddFpSymbol(fn.file, fn.line, arg.id, arg.offset)
 		offset += arg.size
 	}
+	// Record debug info for the synthetic SAV instruction at the function's location
+	l.recordDebugInfo(fn)
 	opCode := machine.EncodeOp(machine.Sav, machine.ImmediateByte, machine.Implied)
 	l.writeByte(int(opCode))
 	l.writeByte(localSize)

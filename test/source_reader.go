@@ -96,6 +96,11 @@ func (s *SourceReader) getLines(filename string) ([]string, error) {
 	return lines, nil
 }
 
+// ReadSourceFile reads all lines from a file.
+func (s *SourceReader) ReadSourceFile(filename string) ([]string, error) {
+	return s.getLines(filename)
+}
+
 // FormatSourceLine formats a source line for display with line number.
 func FormatSourceLine(lineNum int, line string, highlight bool) string {
 	if highlight {

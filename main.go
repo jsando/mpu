@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/jsando/mpu/asm"
+	"github.com/jsando/mpu/debugger"
 	"github.com/jsando/mpu/machine"
 	"github.com/jsando/mpu/test"
 )
@@ -54,6 +55,7 @@ func main() {
 
 	runCmd := flag.NewFlagSet("run", flag.ContinueOnError)
 	sysmon := runCmd.Bool("m", false, "open system monitor/debugger")
+	debug := runCmd.Bool("d", false, "open enhanced debugger")
 	runHelp := runCmd.Bool("help", false, "show help for run command")
 
 	fmtCmd := flag.NewFlagSet("fmt", flag.ContinueOnError)
@@ -101,7 +103,7 @@ func main() {
 			os.Exit(0)
 		}
 		inputs := getInputs(runCmd)
-		run(inputs, *sysmon)
+		run(inputs, *sysmon, *debug)
 	case "fmt":
 		if err := fmtCmd.Parse(os.Args[2:]); err != nil {
 			os.Exit(1)
@@ -178,12 +180,14 @@ func printRunUsage() {
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  -m         Open system monitor/debugger for single-stepping")
+	fmt.Println("  -d         Open enhanced debugger with breakpoints and source view")
 	fmt.Println("  --help     Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  mpu run example/hello.s")
 	fmt.Println("  mpu run game.bin")
 	fmt.Println("  mpu run -m debug_this.s")
+	fmt.Println("  mpu run -d example/hello.s")
 	fmt.Println()
 	fmt.Println("Graphics programs:")
 	fmt.Println("  - Press ESC to quit")
@@ -302,7 +306,7 @@ func getInputs(flagSet *flag.FlagSet) []*os.File {
 
 // Run can be invoked with 1 file that doesn't end with .s, or a list
 // of files ending with .s
-func run(inputs []*os.File, monitor bool) {
+func run(inputs []*os.File, monitor bool, debug bool) {
 	bin := false
 	src := false
 	for _, f := range inputs {
@@ -325,9 +329,12 @@ func run(inputs []*os.File, monitor bool) {
 
 	var bytes []byte
 	var err error
+	var linker *asm.Linker
+	var files []string
+
 	setBaseDirFromInputFile(inputs[0].Name())
 	if src {
-		linker, _ := compile(inputs)
+		linker, files = compile(inputs)
 		bytes = linker.Code()
 	} else {
 		// run program
@@ -336,8 +343,30 @@ func run(inputs []*os.File, monitor bool) {
 			panic(err)
 		}
 	}
+
+	// Ensure code is at least 64KB
+	if len(bytes) < 65536 {
+		padded := make([]byte, 65536)
+		copy(padded, bytes)
+		bytes = padded
+	}
+
 	m := machine.NewMachine(bytes)
-	if monitor {
+	if debug && linker != nil {
+		// Use enhanced debugger
+		dbg := debugger.NewDebugger(m, linker.Symbols(), linker.DebugInfo())
+		ui := debugger.NewDebuggerUI(dbg)
+
+		// Load source files
+		sourceReader := test.NewSourceReader()
+		for _, file := range files {
+			if lines, err := sourceReader.ReadSourceFile(file); err == nil {
+				dbg.LoadSourceFile(file, lines)
+			}
+		}
+
+		ui.Run()
+	} else if monitor {
 		monitor := &Monitor{machine: m, memory: m.Memory()}
 		monitor.Run()
 	} else {
